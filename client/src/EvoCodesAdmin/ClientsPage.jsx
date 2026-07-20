@@ -10,10 +10,52 @@ import {
   ChevronRight,
   TrendingUp,
   Minus,
+  X,
 } from "lucide-react";
-import Sidebar from "../EvoCodesAdmin/Sidebar";
-import { TopBar, PageHeading } from "../EvoCodesAdmin/PageHeader";
-import Modal, { Field, inputClass, selectClass } from "../EvoCodesAdmin/Modal";
+
+// Local Sub-components for Form Fields and Modal
+const inputClass =
+  "w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500";
+
+const selectClass =
+  "w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500";
+
+function Field({ label, children }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <label className="text-xs font-medium text-slate-400">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function Modal({ open, onClose, title, subtitle, children, footer }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+        <div className="flex items-start justify-between border-b border-slate-800 pb-4">
+          <div>
+            <h3 className="text-lg font-bold text-white">{title}</h3>
+            {subtitle && <p className="text-xs text-slate-400">{subtitle}</p>}
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="py-5">{children}</div>
+        {footer && (
+          <div className="flex items-center justify-end gap-3 border-t border-slate-800 pt-4">
+            {footer}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const STATS = [
   { label: "Total Clients", value: "124", delta: "+12%", trend: "up" },
@@ -105,7 +147,7 @@ const emptyClientForm = {
   status: STATUS_OPTIONS[0],
 };
 
-export default function ClientsPage() {
+export default function ClientsPage({ isDarkMode = true }) {
   const [clients, setClients] = useState(CLIENTS);
   const [filter, setFilter] = useState("All");
   const [modalOpen, setModalOpen] = useState(false);
@@ -147,225 +189,230 @@ export default function ClientsPage() {
       prev.map((c) =>
         c.id === editingId
           ? { ...c, ...form, activeProjects: Number(form.activeProjects) || 0 }
-          : c,
-      ),
+          : c
+      )
     );
     closeModal();
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-950">
-      <Sidebar active="clients" />
-
-      <main className="flex-1">
-        <TopBar />
-        <PageHeading
-          breadcrumb={["Admin", "Client Directory"]}
-          title="Client Directory"
-          subtitle="Manage corporate relationships and active infrastructure projects."
-          action={
-            <button className="flex items-center gap-2 rounded-lg bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-cyan-400">
-              <Plus size={16} strokeWidth={2.5} />
-              Add Client
-            </button>
-          }
-        />
-
-        {/* Stats */}
-        <div className="grid grid-cols-4 gap-4 px-8 pt-6">
-          {STATS.map((stat) => (
-            <div
-              key={stat.label}
-              className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"
-            >
-              <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                {stat.label}
-              </p>
-              <div className="mt-2 flex items-end justify-between">
-                <p className="text-2xl font-bold text-white">{stat.value}</p>
-                <span
-                  className={[
-                    "flex items-center gap-1 text-xs font-semibold",
-                    stat.trend === "up" ? "text-emerald-400" : "text-slate-400",
-                  ].join(" ")}
-                >
-                  {stat.trend === "up" ? (
-                    <TrendingUp size={12} />
-                  ) : (
-                    <Minus size={12} />
-                  )}
-                  {stat.delta}
-                </span>
-              </div>
-            </div>
-          ))}
+    <div className="p-4 md:p-8 max-w-7xl w-full mx-auto space-y-6">
+      {/* Page Heading */}
+      <div className="flex flex-col sm:flex-row gap-4 sm:items-end justify-between">
+        <div>
+          <p className="text-xs text-slate-500 mb-1">
+            Admin <span className="mx-1 text-slate-600">/</span>
+            <span className="text-cyan-400">Client Directory</span>
+          </p>
+          <h3
+            className={`text-xl md:text-2xl font-bold ${
+              isDarkMode ? "text-white" : "text-gray-900"
+            }`}
+          >
+            Client Directory
+          </h3>
+          <p className="text-xs md:text-sm text-gray-400 mt-1">
+            Manage corporate relationships and active infrastructure projects.
+          </p>
         </div>
+        <button className="flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2.5 text-xs font-semibold text-slate-950 transition-colors hover:bg-cyan-400">
+          <Plus size={16} strokeWidth={2.5} />
+          Add Client
+        </button>
+      </div>
 
-        {/* Filters */}
-        <div className="mx-8 mt-6 flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-          <div className="flex items-center gap-1">
-            {FILTERS.map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {STATS.map((stat) => (
+          <div
+            key={stat.label}
+            className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"
+          >
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+              {stat.label}
+            </p>
+            <div className="mt-2 flex items-end justify-between">
+              <p className="text-2xl font-bold text-white">{stat.value}</p>
+              <span
                 className={[
-                  "rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors",
-                  filter === f
-                    ? "bg-cyan-500/10 text-cyan-400"
-                    : "text-slate-400 hover:text-slate-200",
+                  "flex items-center gap-1 text-xs font-semibold",
+                  stat.trend === "up" ? "text-emerald-400" : "text-slate-400",
                 ].join(" ")}
               >
-                {f}
-              </button>
-            ))}
-            <span className="ml-2 text-sm text-slate-500">Industry: All</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button className="flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800">
-              <SlidersHorizontal size={14} />
-              Advanced Filters
-            </button>
-            <button className="flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-300 hover:bg-slate-800">
-              <Download size={14} />
-              Export CSV
-            </button>
-          </div>
-        </div>
-
-        {/* Table */}
-        <div className="mx-8 my-6 overflow-hidden rounded-xl border border-slate-800 bg-slate-900/60">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-slate-800 text-xs uppercase tracking-wider text-slate-500">
-                <th className="px-6 py-3.5 font-medium">Company</th>
-                <th className="px-6 py-3.5 font-medium">Primary Contact</th>
-                <th className="px-6 py-3.5 font-medium">Industry</th>
-                <th className="px-6 py-3.5 font-medium">Active Projects</th>
-                <th className="px-6 py-3.5 font-medium">Status</th>
-                <th className="px-6 py-3.5 text-right font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/70">
-              {filteredClients.map((client) => (
-                <tr key={client.id} className="hover:bg-slate-800/30">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold ${client.color}`}
-                      >
-                        {client.initials}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-slate-100">
-                          {client.company}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {client.domain}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <p className="text-slate-200">{client.contact}</p>
-                    <p className="text-xs text-slate-500">
-                      {client.contactEmail}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="rounded-md bg-slate-800 px-2 py-1 text-xs font-medium uppercase tracking-wide text-slate-300">
-                      {client.industry}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-slate-100">
-                        {String(client.activeProjects).padStart(2, "0")}
-                      </span>
-                      <div className="flex -space-x-2">
-                        {client.team.map((t, i) => (
-                          <span
-                            key={i}
-                            className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-slate-900 bg-slate-700 text-[10px] font-semibold text-slate-200"
-                          >
-                            {t}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[client.status]}`}
-                    >
-                      <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                      {client.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center justify-end gap-3 text-slate-400">
-                      <button
-                        className="hover:text-cyan-400"
-                        aria-label="View client"
-                      >
-                        <Eye size={16} />
-                      </button>
-                      <button
-                        onClick={() => openEditModal(client)}
-                        className="hover:text-cyan-400"
-                        aria-label="Edit client"
-                      >
-                        <Pencil size={16} />
-                      </button>
-                      <button
-                        className="hover:text-rose-400"
-                        aria-label="Delete client"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <div className="flex items-center justify-between border-t border-slate-800 px-6 py-3.5">
-            <p className="text-sm text-slate-500">
-              Showing{" "}
-              <span className="font-medium text-slate-300">
-                1 to {filteredClients.length}
-              </span>{" "}
-              of <span className="font-medium text-slate-300">124</span> clients
-            </p>
-            <div className="flex items-center gap-1">
-              <button className="rounded-md p-1.5 text-slate-500 hover:bg-slate-800">
-                <ChevronLeft size={16} />
-              </button>
-              {[1, 2, 3].map((p) => (
-                <button
-                  key={p}
-                  className={[
-                    "h-7 w-7 rounded-md text-sm font-medium",
-                    p === 1
-                      ? "bg-cyan-500 text-slate-950"
-                      : "text-slate-400 hover:bg-slate-800",
-                  ].join(" ")}
-                >
-                  {p}
-                </button>
-              ))}
-              <span className="px-1 text-slate-600">…</span>
-              <button className="h-7 w-7 rounded-md text-sm font-medium text-slate-400 hover:bg-slate-800">
-                31
-              </button>
-              <button className="rounded-md p-1.5 text-slate-500 hover:bg-slate-800">
-                <ChevronRight size={16} />
-              </button>
+                {stat.trend === "up" ? (
+                  <TrendingUp size={12} />
+                ) : (
+                  <Minus size={12} />
+                )}
+                {stat.delta}
+              </span>
             </div>
           </div>
-        </div>
-      </main>
+        ))}
+      </div>
 
+      {/* Filters */}
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+        <div className="flex items-center gap-1">
+          {FILTERS.map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={[
+                "rounded-lg px-3.5 py-1.5 text-xs font-medium transition-colors",
+                filter === f
+                  ? "bg-cyan-500/10 text-cyan-400"
+                  : "text-slate-400 hover:text-slate-200",
+              ].join(" ")}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <button className="flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">
+            <SlidersHorizontal size={14} />
+            Advanced Filters
+          </button>
+          <button className="flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">
+            <Download size={14} />
+            Export CSV
+          </button>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/60">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-slate-800 text-xs uppercase tracking-wider text-slate-500">
+              <th className="px-6 py-3.5 font-medium">Company</th>
+              <th className="px-6 py-3.5 font-medium">Primary Contact</th>
+              <th className="px-6 py-3.5 font-medium">Industry</th>
+              <th className="px-6 py-3.5 font-medium">Active Projects</th>
+              <th className="px-6 py-3.5 font-medium">Status</th>
+              <th className="px-6 py-3.5 text-right font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800/70">
+            {filteredClients.map((client) => (
+              <tr key={client.id} className="hover:bg-slate-800/30">
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold ${client.color}`}
+                    >
+                      {client.initials}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-100">
+                        {client.company}
+                      </p>
+                      <p className="text-xs text-slate-500">{client.domain}</p>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <p className="text-slate-200">{client.contact}</p>
+                  <p className="text-xs text-slate-500">
+                    {client.contactEmail}
+                  </p>
+                </td>
+                <td className="px-6 py-4">
+                  <span className="rounded-md bg-slate-800 px-2 py-1 text-xs font-medium uppercase tracking-wide text-slate-300">
+                    {client.industry}
+                  </span>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-slate-100">
+                      {String(client.activeProjects).padStart(2, "0")}
+                    </span>
+                    <div className="flex -space-x-2">
+                      {client.team.map((t, i) => (
+                        <span
+                          key={i}
+                          className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-slate-900 bg-slate-700 text-[10px] font-semibold text-slate-200"
+                        >
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+                      STATUS_STYLES[client.status]
+                    }`}
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                    {client.status}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-right">
+                  <div className="flex items-center justify-end gap-3 text-slate-400">
+                    <button className="hover:text-cyan-400" aria-label="View">
+                      <Eye size={16} />
+                    </button>
+                    <button
+                      onClick={() => openEditModal(client)}
+                      className="hover:text-cyan-400"
+                      aria-label="Edit"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      className="hover:text-rose-400"
+                      aria-label="Delete"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {/* Pagination */}
+        <div className="flex items-center justify-between border-t border-slate-800 px-6 py-3.5">
+          <p className="text-xs text-slate-500">
+            Showing{" "}
+            <span className="font-medium text-slate-300">
+              1 to {filteredClients.length}
+            </span>{" "}
+            of <span className="font-medium text-slate-300">124</span> clients
+          </p>
+          <div className="flex items-center gap-1">
+            <button className="rounded-md p-1.5 text-slate-500 hover:bg-slate-800">
+              <ChevronLeft size={16} />
+            </button>
+            {[1, 2, 3].map((p) => (
+              <button
+                key={p}
+                className={[
+                  "h-7 w-7 rounded-md text-xs font-medium",
+                  p === 1
+                    ? "bg-cyan-500 text-slate-950"
+                    : "text-slate-400 hover:bg-slate-800",
+                ].join(" ")}
+              >
+                {p}
+              </button>
+            ))}
+            <span className="px-1 text-slate-600">…</span>
+            <button className="h-7 w-7 rounded-md text-xs font-medium text-slate-400 hover:bg-slate-800">
+              31
+            </button>
+            <button className="rounded-md p-1.5 text-slate-500 hover:bg-slate-800">
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Edit Modal */}
       <Modal
         open={modalOpen}
         onClose={closeModal}
@@ -375,13 +422,13 @@ export default function ClientsPage() {
           <>
             <button
               onClick={closeModal}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800"
+              className="rounded-lg border border-slate-700 px-4 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
+              className="rounded-lg bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-400"
             >
               Save Changes
             </button>

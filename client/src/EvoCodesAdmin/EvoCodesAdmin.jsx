@@ -7,7 +7,10 @@ import FilterPanel from './FilterPanel';
 import ProjectTable from './ProjectTable';
 import ProjectModal from './ProjectModal';
 import ContactRequestsTable from './ContactRequestsTable';
-import TeamManagementTable from './TeamManagementTable'; // Imported team component view
+import TeamManagementTable from './TeamManagementTable';
+import ServicesTable from './ServicesPage';
+import ClientsPage from './ClientsPage'; 
+import BlogsPage from './BlogsPage'; // Integrated Blogs Page
 
 const INITIAL_PROJECTS = [
   { id: 1, name: 'Nova Crypto Dashboard', version: 'v2.4.0', client: 'Stellar Ventures', category: 'Web App', tech: ['React', 'Tailwind', 'Node.js'], status: 'In Progress', image: 'https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=80&auto=format&fit=crop&q=60' },
@@ -146,7 +149,7 @@ export default function EvoCodesAdmin() {
           </div>
         </div>
 
-        {/* View Routing Control Area */}
+        {/* Dynamic Route Display */}
         {activeTab === 'Contact Requests' ? (
           <div className="p-4 md:p-8 max-w-7xl w-full mx-auto">
             <ContactRequestsTable isDarkMode={isDarkMode} />
@@ -154,6 +157,16 @@ export default function EvoCodesAdmin() {
         ) : activeTab === 'Employees' ? (
           <div className="p-4 md:p-8 max-w-7xl w-full mx-auto">
             <TeamManagementTable isDarkMode={isDarkMode} />
+          </div>
+        ) : activeTab === 'Services' || activeTab === 'services' ? (
+          <div className="p-4 md:p-8 max-w-7xl w-full mx-auto">
+            <ServicesTable isDarkMode={isDarkMode} />
+          </div>
+        ) : activeTab === 'Clients' || activeTab === 'clients' ? (
+          <ClientsPage isDarkMode={isDarkMode} />
+        ) : activeTab === 'Blogs' || activeTab === 'blogs' ? (
+          <div className="p-4 md:p-8 max-w-7xl w-full mx-auto">
+            <BlogsPage isDarkMode={isDarkMode} />
           </div>
         ) : activeTab !== 'Projects' ? (
           <div className="p-4 md:p-8 text-center text-gray-500 text-sm">

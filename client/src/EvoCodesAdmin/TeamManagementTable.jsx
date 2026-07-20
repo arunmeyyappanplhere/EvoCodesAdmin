@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, UserPlus, SlidersHorizontal, Download, ChevronLeft, ChevronRight, MoreVertical, Terminal, Palette, Megaphone, Briefcase } from 'lucide-react';
+import { Search, UserPlus, SlidersHorizontal, Download, ChevronLeft, ChevronRight, MoreVertical, Terminal, Palette, Megaphone, Briefcase, X, Pencil, Trash2 } from 'lucide-react';
 
 const INITIAL_EMPLOYEES = [
   { id: 1, name: 'Alex Thorne', position: 'Principal Engineer', department: 'Engineering', email: 'a.thorne@evocodes.ai', status: 'ACTIVE', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=60' },
@@ -10,10 +10,24 @@ const INITIAL_EMPLOYEES = [
 
 const DEPARTMENTS = ['All Departments', 'Engineering', 'Design', 'Marketing', 'Operations'];
 
+const emptyEmployeeForm = {
+  name: '',
+  position: '',
+  department: 'Engineering',
+  email: '',
+  status: 'ACTIVE',
+  avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=60'
+};
+
 export default function TeamManagementTable({ isDarkMode }) {
   const [employees, setEmployees] = useState(INITIAL_EMPLOYEES);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDept, setSelectedDept] = useState('All Departments');
+  
+  // Modal state
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingEmployeeId, setEditingEmployeeId] = useState(null);
+  const [form, setForm] = useState(emptyEmployeeForm);
 
   // Filtering Logic
   const filteredEmployees = employees.filter(emp => {
@@ -24,6 +38,42 @@ export default function TeamManagementTable({ isDarkMode }) {
     return matchesSearch && matchesDept;
   });
 
+  const openAddModal = () => {
+    setEditingEmployeeId(null);
+    setForm(emptyEmployeeForm);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (emp) => {
+    setEditingEmployeeId(emp.id);
+    setForm(emp);
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setEditingEmployeeId(null);
+    setForm(emptyEmployeeForm);
+  };
+
+  const handleSave = (e) => {
+    e.preventDefault();
+    if (!form.name || !form.email) return;
+
+    if (editingEmployeeId) {
+      setEmployees(prev => prev.map(emp => emp.id === editingEmployeeId ? { ...emp, ...form } : emp));
+    } else {
+      setEmployees(prev => [{ ...form, id: Date.now() }, ...prev]);
+    }
+    closeModal();
+  };
+
+  const handleDelete = (id) => {
+    if (confirm("Are you sure you want to remove this employee?")) {
+      setEmployees(prev => prev.filter(emp => emp.id !== id));
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Top Heading Panel */}
@@ -32,7 +82,10 @@ export default function TeamManagementTable({ isDarkMode }) {
           <h3 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Team Management</h3>
           <p className="text-xs text-gray-500 mt-1">Manage organization members, roles, and status across departments.</p>
         </div>
-        <button className="flex items-center justify-center gap-2 bg-[#72efdd] hover:bg-[#52e3d0] text-[#0b0f17] px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap">
+        <button 
+          onClick={openAddModal}
+          className="flex items-center justify-center gap-2 bg-[#72efdd] hover:bg-[#52e3d0] text-[#0b0f17] px-4 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer"
+        >
           <UserPlus size={14} /> Add Employee
         </button>
       </div>
@@ -65,13 +118,13 @@ export default function TeamManagementTable({ isDarkMode }) {
             ))}
           </select>
 
-          <button className={`p-2 rounded-lg border transition-all ${
+          <button className={`p-2 rounded-lg border transition-all cursor-pointer ${
             isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-gray-400 hover:text-white' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
           }`}>
             <SlidersHorizontal size={14} />
           </button>
 
-          <button className={`p-2 rounded-lg border transition-all ${
+          <button className={`p-2 rounded-lg border transition-all cursor-pointer ${
             isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-gray-400 hover:text-white' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
           }`}>
             <Download size={14} />
@@ -130,10 +183,15 @@ export default function TeamManagementTable({ isDarkMode }) {
                         {emp.status}
                       </span>
                     </td>
-                    <td className="py-4 px-6 text-right text-gray-500 hover:text-white">
-                      <button className="p-1 rounded hover:bg-gray-800/40 transition-colors">
-                        <MoreVertical size={16} />
-                      </button>
+                    <td className="py-4 px-6 text-right text-gray-500">
+                      <div className="flex items-center justify-end gap-2">
+                        <button onClick={() => openEditModal(emp)} className="p-1 rounded hover:text-cyan-400 transition-colors cursor-pointer">
+                          <Pencil size={15} />
+                        </button>
+                        <button onClick={() => handleDelete(emp.id)} className="p-1 rounded hover:text-rose-400 transition-colors cursor-pointer">
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -146,18 +204,16 @@ export default function TeamManagementTable({ isDarkMode }) {
         <div className={`p-4 flex flex-col sm:flex-row gap-4 items-center justify-between text-xs text-gray-500 border-t ${
           isDarkMode ? 'bg-[#131a2e]/60 border-[#1e2640]' : 'bg-gray-50 border-gray-200'
         }`}>
-          <div>Showing <span className={`${isDarkMode ? 'text-gray-300' : 'text-gray-700'} font-semibold`}>1 to {filteredEmployees.length}</span> of <span className={`${isDarkMode ? 'text-gray-300' : 'text-gray-700'} font-semibold`}>128</span> employees</div>
+          <div>Showing <span className={`${isDarkMode ? 'text-gray-300' : 'text-gray-700'} font-semibold`}>1 to {filteredEmployees.length}</span> of <span className={`${isDarkMode ? 'text-gray-300' : 'text-gray-700'} font-semibold`}>{employees.length}</span> employees</div>
           <div className="flex gap-1">
             <button className="p-1.5 rounded border border-[#222f54] text-gray-500 hover:text-white cursor-pointer"><ChevronLeft size={14} /></button>
             <button className="px-2.5 py-1 rounded font-bold bg-[#4cc9f0] text-[#0b0f17]">1</button>
-            <button className="px-2.5 py-1 rounded font-bold text-gray-400 hover:text-white">2</button>
-            <button className="px-2.5 py-1 rounded font-bold text-gray-400 hover:text-white">3</button>
             <button className="p-1.5 rounded border border-[#222f54] text-gray-500 hover:text-white cursor-pointer"><ChevronRight size={14} /></button>
           </div>
         </div>
       </div>
 
-      {/* Department Distribution Widgets Layout from screenshot */}
+      {/* Department Distribution Widgets */}
       <div className="space-y-4 pt-4">
         <h4 className={`text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
           Department Distribution
@@ -226,6 +282,111 @@ export default function TeamManagementTable({ isDarkMode }) {
 
         </div>
       </div>
+
+      {/* Employee Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className={`w-full max-w-lg rounded-xl border p-6 space-y-4 shadow-2xl relative ${
+            isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-gray-200' : 'bg-white border-gray-200 text-gray-800'
+          }`}>
+            <div className="flex items-center justify-between pb-2 border-b border-gray-700/50">
+              <h4 className="text-lg font-bold">{editingEmployeeId ? "Edit Employee" : "Add New Employee"}</h4>
+              <button onClick={closeModal} className="text-gray-400 hover:text-white transition-colors cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSave} className="grid grid-cols-2 gap-4 text-xs">
+              <div className="col-span-2 space-y-1">
+                <label className="text-gray-400 font-medium">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder="e.g. Alex Thorne"
+                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${
+                    isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
+                  }`}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-gray-400 font-medium">Position / Role</label>
+                <input
+                  type="text"
+                  required
+                  value={form.position}
+                  onChange={(e) => setForm({ ...form, position: e.target.value })}
+                  placeholder="e.g. Lead Developer"
+                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${
+                    isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
+                  }`}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-gray-400 font-medium">Department</label>
+                <select
+                  value={form.department}
+                  onChange={(e) => setForm({ ...form, department: e.target.value })}
+                  className={`w-full p-2.5 rounded-lg border focus:ring-0 ${
+                    isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-white' : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                >
+                  {DEPARTMENTS.filter(d => d !== 'All Departments').map(dept => (
+                    <option key={dept} value={dept}>{dept}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="col-span-2 space-y-1">
+                <label className="text-gray-400 font-medium">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  placeholder="a.thorne@evocodes.ai"
+                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${
+                    isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
+                  }`}
+                />
+              </div>
+
+              <div className="col-span-2 space-y-1">
+                <label className="text-gray-400 font-medium">Status</label>
+                <select
+                  value={form.status}
+                  onChange={(e) => setForm({ ...form, status: e.target.value })}
+                  className={`w-full p-2.5 rounded-lg border focus:ring-0 ${
+                    isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-white' : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                >
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="ON LEAVE">ON LEAVE</option>
+                </select>
+              </div>
+
+              <div className="col-span-2 flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="px-4 py-2 rounded-lg border border-gray-700 text-xs font-medium hover:bg-gray-800 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-lg bg-[#72efdd] text-[#0b0f17] text-xs font-bold hover:bg-[#52e3d0] transition-colors cursor-pointer"
+                >
+                  Save Member
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

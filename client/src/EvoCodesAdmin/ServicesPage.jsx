@@ -12,13 +12,10 @@ import {
   Cloud,
   ArrowUpRight,
 } from "lucide-react";
-import Sidebar from "../EvoCodesAdmin/Sidebar";
-import { TopBar, PageHeading } from "../EvoCodesAdmin/PageHeader";
-import Modal, { Field, inputClass, selectClass } from "../EvoCodesAdmin/Modal";
 
 const FILTERS = ["All Services", "Active", "Maintenance", "Legacy"];
 
-const SERVICES = [
+const INITIAL_SERVICES = [
   {
     id: 1,
     name: "API Architecture",
@@ -115,8 +112,8 @@ const emptyServiceForm = {
   status: STATUS_OPTIONS[0],
 };
 
-export default function ServicesPage() {
-  const [services, setServices] = useState(SERVICES);
+export default function ServicesPage({ isDarkMode }) {
+  const [services, setServices] = useState(INITIAL_SERVICES);
   const [filter, setFilter] = useState("All Services");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -126,6 +123,12 @@ export default function ServicesPage() {
     if (filter === "All Services") return services;
     return services.filter((s) => s.status === filter);
   }, [filter, services]);
+
+  const openCreateModal = () => {
+    setEditingId(null);
+    setForm(emptyServiceForm);
+    setModalOpen(true);
+  };
 
   const openEditModal = (service) => {
     setEditingId(service.id);
@@ -151,100 +154,122 @@ export default function ServicesPage() {
     setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const handleSave = () => {
-    setServices((prev) =>
-      prev.map((s) =>
-        s.id === editingId
-          ? {
-              ...s,
-              ...form,
-              features: form.features
-                .split(",")
-                .map((f) => f.trim())
-                .filter(Boolean),
-            }
-          : s
-      )
-    );
+    if (editingId) {
+      setServices((prev) =>
+        prev.map((s) =>
+          s.id === editingId
+            ? {
+                ...s,
+                ...form,
+                features: form.features
+                  .split(",")
+                  .map((f) => f.trim())
+                  .filter(Boolean),
+              }
+            : s
+        )
+      );
+    } else {
+      const newService = {
+        ...form,
+        id: Date.now(),
+        icon: Server,
+        iconBg: "bg-cyan-500/15 text-cyan-300",
+        features: form.features
+          .split(",")
+          .map((f) => f.trim())
+          .filter(Boolean),
+      };
+      setServices((prev) => [newService, ...prev]);
+    }
     closeModal();
   };
 
+  const handleDelete = (id) => {
+    if (confirm("Are you sure you want to delete this service?")) {
+      setServices((prev) => prev.filter((s) => s.id !== id));
+    }
+  };
+
   return (
-    <div className="flex min-h-screen bg-slate-950">
-      <Sidebar active="services" />
-
-      <main className="flex-1">
-        <TopBar />
-        <PageHeading
-          breadcrumb={["Admin", "Services"]}
-          title="Services Management"
-          subtitle="Configure and deploy technical service packages for Evo Codes clients. Monitor status, pricing tiers, and key feature deliverables."
-          action={
-            <button className="flex items-center gap-2 rounded-lg bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-cyan-400">
-              <Plus size={16} strokeWidth={2.5} />
-              Add Service
-            </button>
-          }
-        />
-
-        {/* Filters */}
-        <div className="mx-8 mt-6 flex items-center justify-between">
-          <div className="flex items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/60 p-1">
-            {FILTERS.map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={[
-                  "rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors",
-                  filter === f
-                    ? "bg-cyan-500/10 text-cyan-400"
-                    : "text-slate-400 hover:text-slate-200",
-                ].join(" ")}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-slate-500">Sort by: Newest</span>
-            <span className="text-sm text-slate-500">
-              Showing 1-{filteredServices.length} of 24 services
-            </span>
-          </div>
+    <div className="space-y-6">
+      {/* Top Heading Panel */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h3 className={`text-xl md:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+            Services Management
+          </h3>
+          <p className="text-xs md:text-sm text-gray-500 mt-1">
+            Configure and deploy technical service packages for Evo Codes clients. Monitor status, pricing tiers, and key feature deliverables.
+          </p>
         </div>
+        <button
+          onClick={openCreateModal}
+          className="flex items-center justify-center gap-2 bg-[#72efdd] hover:bg-[#52e3d0] text-[#0b0f17] px-4 py-2 rounded-lg text-xs font-bold transition-all shadow-lg shadow-[#72efdd]/10 whitespace-nowrap"
+        >
+          <Plus size={16} strokeWidth={2.5} /> Add Service
+        </button>
+      </div>
 
-        {/* Table */}
-        <div className="mx-8 my-6 overflow-hidden rounded-xl border border-slate-800 bg-slate-900/60">
-          <table className="w-full text-left text-sm">
+      {/* Filters Bar */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
+        <div className={`flex items-center gap-1 p-1 rounded-xl border ${
+          isDarkMode ? 'bg-[#0f1422] border-[#1e2640]' : 'bg-white border-gray-200'
+        }`}>
+          {FILTERS.map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
+                filter === f
+                  ? "bg-cyan-500/10 text-cyan-400 font-bold"
+                  : "text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-4 text-gray-500">
+          <span>Sort by: Newest</span>
+          <span>Showing 1-{filteredServices.length} of {services.length} services</span>
+        </div>
+      </div>
+
+      {/* Table Section */}
+      <div className={`rounded-xl border overflow-hidden transition-colors w-full ${
+        isDarkMode ? 'bg-[#0f1422] border-[#1e2640]' : 'bg-white border-gray-200'
+      }`}>
+        <div className="overflow-x-auto w-full">
+          <table className="w-full text-left text-sm border-collapse min-w-[800px]">
             <thead>
-              <tr className="border-b border-slate-800 text-xs uppercase tracking-wider text-slate-500">
-                <th className="px-6 py-3.5 font-medium">Icon</th>
-                <th className="px-6 py-3.5 font-medium">Service Name</th>
-                <th className="px-6 py-3.5 font-medium">Description</th>
-                <th className="px-6 py-3.5 font-medium">Features</th>
-                <th className="px-6 py-3.5 font-medium">Pricing</th>
-                <th className="px-6 py-3.5 font-medium">Status</th>
-                <th className="px-6 py-3.5 text-right font-medium">Actions</th>
+              <tr className={`border-b text-[10px] uppercase font-bold tracking-wider text-gray-500 ${
+                isDarkMode ? 'bg-[#131a2e] border-[#1e2640]' : 'bg-gray-50 border-gray-200'
+              }`}>
+                <th className="px-6 py-3.5">Icon</th>
+                <th className="px-6 py-3.5">Service Name</th>
+                <th className="px-6 py-3.5">Description</th>
+                <th className="px-6 py-3.5">Features</th>
+                <th className="px-6 py-3.5">Pricing</th>
+                <th className="px-6 py-3.5">Status</th>
+                <th className="px-6 py-3.5 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/70">
+            <tbody className={`divide-y text-sm ${isDarkMode ? 'divide-[#1e2640]/50' : 'divide-gray-200'}`}>
               {filteredServices.map((service) => {
-                const Icon = service.icon;
+                const Icon = service.icon || Server;
                 return (
-                  <tr key={service.id} className="hover:bg-slate-800/30">
+                  <tr key={service.id} className={`transition-colors ${isDarkMode ? 'hover:bg-[#141b2d]' : 'hover:bg-gray-50'}`}>
                     <td className="px-6 py-4">
-                      <div
-                        className={`flex h-10 w-10 items-center justify-center rounded-lg ${service.iconBg}`}
-                      >
+                      <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${service.iconBg || 'bg-cyan-500/15 text-cyan-300'}`}>
                         <Icon size={18} />
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <p className="font-semibold text-slate-100">{service.name}</p>
-                      <p className="text-xs uppercase tracking-wide text-slate-500">
-                        {service.category}
-                      </p>
+                      <p className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{service.name}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-gray-500">{service.category}</p>
                     </td>
-                    <td className="max-w-xs px-6 py-4 text-slate-400">
+                    <td className="max-w-xs px-6 py-4 text-xs text-gray-400">
                       {service.description}
                     </td>
                     <td className="px-6 py-4">
@@ -252,7 +277,9 @@ export default function ServicesPage() {
                         {service.features.map((feat) => (
                           <span
                             key={feat}
-                            className="rounded-md bg-slate-800 px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-slate-300"
+                            className={`rounded px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide border ${
+                              isDarkMode ? 'bg-[#151c30] border-[#222f54] text-gray-300' : 'bg-gray-100 border-gray-200 text-gray-700'
+                            }`}
                           >
                             {feat}
                           </span>
@@ -260,28 +287,22 @@ export default function ServicesPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <p className="font-semibold text-cyan-400">{service.price}</p>
-                      <p className="text-xs text-slate-500">{service.priceNote}</p>
+                      <p className="font-semibold text-cyan-400 text-xs">{service.price}</p>
+                      <p className="text-[10px] text-gray-500">{service.priceNote}</p>
                     </td>
                     <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[service.status]}`}
-                      >
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${STATUS_STYLES[service.status]}`}>
                         <span className="h-1.5 w-1.5 rounded-full bg-current" />
                         {service.status}
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-3 text-slate-400">
-                        <button
-                          onClick={() => openEditModal(service)}
-                          className="hover:text-cyan-400"
-                          aria-label="Edit service"
-                        >
-                          <Pencil size={16} />
+                      <div className="flex items-center justify-end gap-3 text-gray-400">
+                        <button onClick={() => openEditModal(service)} className="hover:text-cyan-400 transition-colors" aria-label="Edit service">
+                          <Pencil size={15} />
                         </button>
-                        <button className="hover:text-rose-400" aria-label="Delete service">
-                          <Trash2 size={16} />
+                        <button onClick={() => handleDelete(service.id)} className="hover:text-rose-400 transition-colors" aria-label="Delete service">
+                          <Trash2 size={15} />
                         </button>
                       </div>
                     </td>
@@ -290,164 +311,160 @@ export default function ServicesPage() {
               })}
             </tbody>
           </table>
+        </div>
 
-          <div className="flex items-center justify-between border-t border-slate-800 px-6 py-3.5">
-            <div className="flex items-center gap-1">
-              <button className="rounded-md p-1.5 text-slate-500 hover:bg-slate-800">
-                <ChevronLeft size={16} />
-              </button>
-              {[1, 2, 3].map((p) => (
-                <button
-                  key={p}
-                  className={[
-                    "h-7 w-7 rounded-md text-sm font-medium",
-                    p === 1
-                      ? "bg-cyan-500 text-slate-950"
-                      : "text-slate-400 hover:bg-slate-800",
-                  ].join(" ")}
+        {/* Table Footer */}
+        <div className={`p-4 flex items-center justify-between text-xs text-gray-500 border-t ${
+          isDarkMode ? 'bg-[#131a2e]/60 border-[#1e2640]' : 'bg-gray-50 border-gray-200'
+        }`}>
+          <div className="flex items-center gap-1">
+            <button className="p-1 rounded border border-[#222f54] text-gray-500 hover:text-white"><ChevronLeft size={14} /></button>
+            <button className="px-2 py-0.5 rounded font-bold bg-cyan-400 text-[#0b0f17]">1</button>
+            <button className="p-1 rounded border border-[#222f54] text-gray-500 hover:text-white"><ChevronRight size={14} /></button>
+          </div>
+          <p>Jump to page <span className="font-semibold text-gray-300">1</span></p>
+        </div>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+        {SUMMARY_CARDS.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div key={card.label} className={`p-5 rounded-xl border flex flex-col justify-between ${
+              isDarkMode ? 'bg-[#0f1422] border-[#1e2640]' : 'bg-white border-gray-200'
+            }`}>
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{card.label}</p>
+                <Icon size={16} className={card.tone} />
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <p className={`text-2xl font-black ${card.tone}`}>{card.value}</p>
+                {card.unit && (
+                  <span className="flex items-center gap-1 text-xs font-medium text-gray-400">
+                    {card.label === "Revenue Impact" && <ArrowUpRight size={12} className={card.tone} />}
+                    {card.unit}
+                  </span>
+                )}
+              </div>
+              <p className="mt-2 text-xs text-gray-500 leading-relaxed">{card.note}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Service Modal */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className={`w-full max-w-lg rounded-xl border p-6 space-y-4 shadow-2xl ${
+            isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-gray-200' : 'bg-white border-gray-200 text-gray-800'
+          }`}>
+            <h4 className="text-lg font-bold">{editingId ? "Edit Service" : "Add Service"}</h4>
+            
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              <div className="space-y-1">
+                <label className="text-gray-400 font-medium">Service Name</label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={handleChange("name")}
+                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${
+                    isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
+                  }`}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-gray-400 font-medium">Category</label>
+                <input
+                  type="text"
+                  value={form.category}
+                  onChange={handleChange("category")}
+                  placeholder="e.g. Backend / Core"
+                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${
+                    isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
+                  }`}
+                />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <label className="text-gray-400 font-medium">Description</label>
+                <textarea
+                  value={form.description}
+                  onChange={handleChange("description")}
+                  rows={3}
+                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${
+                    isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
+                  }`}
+                />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <label className="text-gray-400 font-medium">Features (comma separated)</label>
+                <input
+                  type="text"
+                  value={form.features}
+                  onChange={handleChange("features")}
+                  placeholder="GraphQL, Redis, OAuth2"
+                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${
+                    isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
+                  }`}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-gray-400 font-medium">Price</label>
+                <input
+                  type="text"
+                  value={form.price}
+                  onChange={handleChange("price")}
+                  placeholder="$4,500"
+                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${
+                    isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
+                  }`}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-gray-400 font-medium">Price Note</label>
+                <input
+                  type="text"
+                  value={form.priceNote}
+                  onChange={handleChange("priceNote")}
+                  placeholder="Starting from"
+                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${
+                    isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
+                  }`}
+                />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <label className="text-gray-400 font-medium">Status</label>
+                <select
+                  value={form.status}
+                  onChange={handleChange("status")}
+                  className={`w-full p-2.5 rounded-lg border focus:ring-0 ${
+                    isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-white' : 'bg-white border-gray-300 text-gray-900'
+                  }`}
                 >
-                  {p}
-                </button>
-              ))}
-              <button className="rounded-md p-1.5 text-slate-500 hover:bg-slate-800">
-                <ChevronRight size={16} />
+                  {STATUS_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={closeModal}
+                className="px-4 py-2 rounded-lg border border-gray-700 text-xs font-medium hover:bg-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                className="px-4 py-2 rounded-lg bg-cyan-400 text-[#0b0f17] text-xs font-bold hover:bg-cyan-300"
+              >
+                Save Changes
               </button>
             </div>
-            <p className="text-sm text-slate-500">
-              Jump to page <span className="font-medium text-slate-300">1</span>
-            </p>
           </div>
         </div>
-
-        {/* Summary cards */}
-        <div className="mx-8 mb-8 grid grid-cols-3 gap-4">
-          {SUMMARY_CARDS.map((card) => {
-            const Icon = card.icon;
-            return (
-              <div
-                key={card.label}
-                className="rounded-xl border border-slate-800 bg-slate-900/60 p-5"
-              >
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                    {card.label}
-                  </p>
-                  <Icon size={16} className={card.tone} />
-                </div>
-                <div className="mt-2 flex items-baseline gap-2">
-                  <p className={`text-2xl font-bold ${card.tone}`}>{card.value}</p>
-                  {card.unit && (
-                    <span className="flex items-center gap-1 text-xs font-medium text-slate-400">
-                      {card.label === "Revenue Impact" && (
-                        <ArrowUpRight size={12} className={card.tone} />
-                      )}
-                      {card.unit}
-                    </span>
-                  )}
-                </div>
-                <p className="mt-2 text-xs leading-relaxed text-slate-500">{card.note}</p>
-              </div>
-            );
-          })}
-        </div>
-      </main>
-
-      <Modal
-        open={modalOpen}
-        onClose={closeModal}
-        title="Edit Service"
-        subtitle={form.name}
-        footer={
-          <>
-            <button
-              onClick={closeModal}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
-            >
-              Save Changes
-            </button>
-          </>
-        }
-      >
-        <div className="grid grid-cols-2 gap-4">
-          <Field label="Service Name">
-            <input
-              type="text"
-              value={form.name}
-              onChange={handleChange("name")}
-              className={inputClass}
-            />
-          </Field>
-          <Field label="Category">
-            <input
-              type="text"
-              value={form.category}
-              onChange={handleChange("category")}
-              placeholder="e.g. Backend / Core"
-              className={inputClass}
-            />
-          </Field>
-          <div className="col-span-2">
-            <Field label="Description">
-              <textarea
-                value={form.description}
-                onChange={handleChange("description")}
-                rows={3}
-                className={inputClass}
-              />
-            </Field>
-          </div>
-          <div className="col-span-2">
-            <Field label="Features (comma separated)">
-              <input
-                type="text"
-                value={form.features}
-                onChange={handleChange("features")}
-                placeholder="GraphQL, Redis, OAuth2"
-                className={inputClass}
-              />
-            </Field>
-          </div>
-          <Field label="Price">
-            <input
-              type="text"
-              value={form.price}
-              onChange={handleChange("price")}
-              placeholder="$4,500"
-              className={inputClass}
-            />
-          </Field>
-          <Field label="Price Note">
-            <input
-              type="text"
-              value={form.priceNote}
-              onChange={handleChange("priceNote")}
-              placeholder="Starting from"
-              className={inputClass}
-            />
-          </Field>
-          <div className="col-span-2">
-            <Field label="Status">
-              <select
-                value={form.status}
-                onChange={handleChange("status")}
-                className={selectClass}
-              >
-                {STATUS_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
-        </div>
-      </Modal>
+      )}
     </div>
   );
 }
