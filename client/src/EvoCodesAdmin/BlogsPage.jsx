@@ -145,7 +145,7 @@ export default function BlogsPage({ isDarkMode = true }) {
   const selectionActive = selected.length > 0;
 
   return (
-    <div className="space-y-6">
+    <div className="p-4 md:p-8 max-w-7xl w-full mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>

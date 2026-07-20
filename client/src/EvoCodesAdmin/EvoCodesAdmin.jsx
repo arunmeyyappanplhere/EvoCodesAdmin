@@ -9,7 +9,8 @@ import ProjectModal from './ProjectModal';
 import ContactRequestsTable from './ContactRequestsTable';
 import TeamManagementTable from './TeamManagementTable';
 import ServicesTable from './ServicesPage';
-import ClientsPage from './ClientsPage'; 
+import ClientsPage from './ClientsPage';
+import TestimonialsPage from './TestimonialsPage';
 import BlogsPage from './BlogsPage'; // Integrated Blogs Page
 
 const INITIAL_PROJECTS = [
@@ -164,10 +165,10 @@ export default function EvoCodesAdmin() {
           </div>
         ) : activeTab === 'Clients' || activeTab === 'clients' ? (
           <ClientsPage isDarkMode={isDarkMode} />
-        ) : activeTab === 'Blogs' || activeTab === 'blogs' ? (
-          <div className="p-4 md:p-8 max-w-7xl w-full mx-auto">
-            <BlogsPage isDarkMode={isDarkMode} />
-          </div>
+        ) : activeTab === 'Testimonials' || activeTab === 'testimonials' || activeTab === 'Client Testimonials' ? (
+          <TestimonialsPage isDarkMode={isDarkMode} />
+        ) : activeTab === 'Blogs' || activeTab === 'blogs' || activeTab === 'CMS/Blogs' ? (
+          <BlogsPage isDarkMode={isDarkMode} />
         ) : activeTab !== 'Projects' ? (
           <div className="p-4 md:p-8 text-center text-gray-500 text-sm">
             Section <strong>"{activeTab}"</strong> is currently streaming connected pipeline endpoints. Displaying grid mock placeholder layouts.

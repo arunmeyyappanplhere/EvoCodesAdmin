@@ -11,9 +11,7 @@ import {
   ThumbsUp,
   Clock,
 } from "lucide-react";
-import Sidebar from "../EvoCodesAdmin/Sidebar";
-import { TopBar, PageHeading } from "../EvoCodesAdmin/PageHeader";
-import Modal, { Field, inputClass, selectClass } from "../EvoCodesAdmin/Modal";
+import Modal, { Field, inputClass, selectClass } from "./Modal";
 
 const STATUS_OPTIONS = ["Published", "Pending Review", "Archived"];
 const STATUS_STYLES = {
@@ -138,7 +136,7 @@ function StarRating({ value }) {
   );
 }
 
-export default function TestimonialsPage() {
+export default function TestimonialsPage({ isDarkMode }) {
   const [testimonials, setTestimonials] = useState(TESTIMONIALS);
   const [filter, setFilter] = useState("All");
   const [query, setQuery] = useState("");
@@ -217,175 +215,174 @@ export default function TestimonialsPage() {
   const cards = SUMMARY_CARDS(testimonials);
 
   return (
-    <div className="flex min-h-screen bg-slate-950">
-      <Sidebar active="testimonials" />
+    <div className="p-4 md:p-8 max-w-7xl w-full mx-auto space-y-6">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row gap-4 sm:items-end justify-between">
+        <div>
+          <h3 className={`text-xl md:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+            Client Testimonials
+          </h3>
+          <p className="text-xs md:text-sm text-gray-500 mt-1">
+            Review, edit, and moderate client feedback on delivered projects.
+          </p>
+        </div>
+        <button className="flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-xs font-bold text-slate-950 transition-colors hover:bg-cyan-400">
+          <Plus size={16} strokeWidth={2.5} />
+          Add Testimonial
+        </button>
+      </div>
 
-      <main className="flex-1">
-        <TopBar />
-        <PageHeading
-          breadcrumb={["Admin", "Client Testimonials"]}
-          title="Client Testimonials"
-          subtitle="Review, edit, and moderate client feedback on delivered projects."
-          action={
-            <button className="flex items-center gap-2 rounded-lg bg-cyan-500 px-4 py-2.5 text-sm font-semibold text-slate-950 transition-colors hover:bg-cyan-400">
-              <Plus size={16} strokeWidth={2.5} />
-              Add Testimonial
-            </button>
-          }
-        />
-
-        {/* Stats */}
-        <div className="grid grid-cols-4 gap-4 px-8 pt-6">
-          {cards.map((card) => {
-            const Icon = card.icon;
-            return (
-              <div
-                key={card.label}
-                className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"
-              >
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
-                    {card.label}
-                  </p>
-                  <Icon size={15} className={card.tone} />
-                </div>
-                <p className={`mt-2 text-2xl font-bold ${card.tone}`}>{card.value}</p>
+      {/* Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {cards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div
+              key={card.label}
+              className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                  {card.label}
+                </p>
+                <Icon size={15} className={card.tone} />
               </div>
-            );
-          })}
-        </div>
-
-        {/* Filters + search */}
-        <div className="mx-8 mt-6 flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-3">
-          <div className="flex items-center gap-1">
-            {FILTERS.map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={[
-                  "rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors",
-                  filter === f
-                    ? "bg-cyan-500/10 text-cyan-400"
-                    : "text-slate-400 hover:text-slate-200",
-                ].join(" ")}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-          <div className="relative w-full max-w-xs">
-            <Search
-              size={15}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
-            />
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search client, company, or project..."
-              className="w-full rounded-lg border border-slate-700 bg-slate-800/60 py-2 pl-9 pr-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
-            />
-          </div>
-        </div>
-
-        {/* Table */}
-        <div className="mx-8 my-6 overflow-hidden rounded-xl border border-slate-800 bg-slate-900/60">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-slate-800 text-xs uppercase tracking-wider text-slate-500">
-                <th className="px-6 py-3.5 font-medium">Client</th>
-                <th className="px-6 py-3.5 font-medium">Project</th>
-                <th className="px-6 py-3.5 font-medium">Rating</th>
-                <th className="px-6 py-3.5 font-medium">Review</th>
-                <th className="px-6 py-3.5 font-medium">Date</th>
-                <th className="px-6 py-3.5 font-medium">Status</th>
-                <th className="px-6 py-3.5 text-right font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/70">
-              {filtered.map((item) => (
-                <tr key={item.id} className="hover:bg-slate-800/30">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold ${item.color}`}
-                      >
-                        {item.initials}
-                      </div>
-                      <div>
-                        <p className="font-semibold text-slate-100">{item.client}</p>
-                        <p className="text-xs text-slate-500">{item.company}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-slate-300">{item.project}</td>
-                  <td className="px-6 py-4">
-                    <StarRating value={item.rating} />
-                  </td>
-                  <td className="max-w-xs px-6 py-4">
-                    <p className="line-clamp-2 text-slate-400">{item.review}</p>
-                  </td>
-                  <td className="px-6 py-4 text-slate-400">{item.date}</td>
-                  <td className="px-6 py-4">
-                    <span
-                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[item.status]}`}
-                    >
-                      <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                      {item.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center justify-end gap-3 text-slate-400">
-                      <button
-                        onClick={() => openEditModal(item)}
-                        className="hover:text-cyan-400"
-                        aria-label="Edit testimonial"
-                      >
-                        <Pencil size={16} />
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget(item)}
-                        className="hover:text-rose-400"
-                        aria-label="Delete testimonial"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-6 py-10 text-center text-slate-500">
-                    No testimonials match your search or filter.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-
-          <div className="flex items-center justify-between border-t border-slate-800 px-6 py-3.5">
-            <p className="text-sm text-slate-500">
-              Showing{" "}
-              <span className="font-medium text-slate-300">{filtered.length}</span> of{" "}
-              <span className="font-medium text-slate-300">{testimonials.length}</span>{" "}
-              testimonials
-            </p>
-            <div className="flex items-center gap-1">
-              <button className="rounded-md p-1.5 text-slate-500 hover:bg-slate-800">
-                <ChevronLeft size={16} />
-              </button>
-              <button className="h-7 w-7 rounded-md bg-cyan-500 text-sm font-medium text-slate-950">
-                1
-              </button>
-              <button className="rounded-md p-1.5 text-slate-500 hover:bg-slate-800">
-                <ChevronRight size={16} />
-              </button>
+              <p className={`mt-2 text-2xl font-bold ${card.tone}`}>{card.value}</p>
             </div>
+          );
+        })}
+      </div>
+
+      {/* Filters + search */}
+      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+        <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto">
+          {FILTERS.map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={[
+                "rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors whitespace-nowrap",
+                filter === f
+                  ? "bg-cyan-500/10 text-cyan-400"
+                  : "text-slate-400 hover:text-slate-200",
+              ].join(" ")}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+        <div className="relative w-full sm:max-w-xs">
+          <Search
+            size={15}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
+          />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search client, company, or project..."
+            className="w-full rounded-lg border border-slate-700 bg-slate-800/60 py-2 pl-9 pr-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+          />
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/60">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b border-slate-800 text-xs uppercase tracking-wider text-slate-500">
+              <th className="px-6 py-3.5 font-medium">Client</th>
+              <th className="px-6 py-3.5 font-medium">Project</th>
+              <th className="px-6 py-3.5 font-medium">Rating</th>
+              <th className="px-6 py-3.5 font-medium">Review</th>
+              <th className="px-6 py-3.5 font-medium">Date</th>
+              <th className="px-6 py-3.5 font-medium">Status</th>
+              <th className="px-6 py-3.5 text-right font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-800/70">
+            {filtered.map((item) => (
+              <tr key={item.id} className="hover:bg-slate-800/30">
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold ${item.color}`}
+                    >
+                      {item.initials}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-slate-100">{item.client}</p>
+                      <p className="text-xs text-slate-500">{item.company}</p>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-slate-300">{item.project}</td>
+                <td className="px-6 py-4">
+                  <StarRating value={item.rating} />
+                </td>
+                <td className="max-w-xs px-6 py-4">
+                  <p className="line-clamp-2 text-slate-400">{item.review}</p>
+                </td>
+                <td className="px-6 py-4 text-slate-400">{item.date}</td>
+                <td className="px-6 py-4">
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[item.status]}`}
+                  >
+                    <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                    {item.status}
+                  </span>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center justify-end gap-3 text-slate-400">
+                    <button
+                      onClick={() => openEditModal(item)}
+                      className="hover:text-cyan-400"
+                      aria-label="Edit testimonial"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      onClick={() => setDeleteTarget(item)}
+                      className="hover:text-rose-400"
+                      aria-label="Delete testimonial"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-6 py-10 text-center text-slate-500">
+                  No testimonials match your search or filter.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        <div className="flex items-center justify-between border-t border-slate-800 px-6 py-3.5">
+          <p className="text-sm text-slate-500">
+            Showing{" "}
+            <span className="font-medium text-slate-300">{filtered.length}</span> of{" "}
+            <span className="font-medium text-slate-300">{testimonials.length}</span>{" "}
+            testimonials
+          </p>
+          <div className="flex items-center gap-1">
+            <button className="rounded-md p-1.5 text-slate-500 hover:bg-slate-800">
+              <ChevronLeft size={16} />
+            </button>
+            <button className="h-7 w-7 rounded-md bg-cyan-500 text-sm font-medium text-slate-950">
+              1
+            </button>
+            <button className="rounded-md p-1.5 text-slate-500 hover:bg-slate-800">
+              <ChevronRight size={16} />
+            </button>
           </div>
         </div>
-      </main>
+      </div>
 
       {/* Edit modal */}
       <Modal
