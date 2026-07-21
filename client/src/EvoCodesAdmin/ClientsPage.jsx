@@ -1,9 +1,9 @@
+'use client';
+
 import React, { useMemo, useState } from "react";
 import {
   Plus,
-  SlidersHorizontal,
   Download,
-  Eye,
   Pencil,
   Trash2,
   ChevronLeft,
@@ -126,6 +126,14 @@ const STATUS_STYLES = {
   Archived: "bg-slate-500/10 text-slate-400",
 };
 
+const COLOR_OPTIONS = [
+  "bg-cyan-500/20 text-cyan-300",
+  "bg-violet-500/20 text-violet-300",
+  "bg-emerald-500/20 text-emerald-300",
+  "bg-amber-500/20 text-amber-300",
+  "bg-rose-500/20 text-rose-300",
+];
+
 const FILTERS = ["All", "Active", "Archived"];
 const STATUS_OPTIONS = ["Active", "Pending Review", "On Hold", "Archived"];
 const INDUSTRY_OPTIONS = [
@@ -161,6 +169,12 @@ export default function ClientsPage({ isDarkMode = true }) {
     return clients.filter((c) => c.status === "Archived");
   }, [filter, clients]);
 
+  const openCreateModal = () => {
+    setEditingId(null);
+    setForm(emptyClientForm);
+    setModalOpen(true);
+  };
+
   const openEditModal = (client) => {
     setEditingId(client.id);
     setForm({
@@ -185,14 +199,114 @@ export default function ClientsPage({ isDarkMode = true }) {
     setForm((f) => ({ ...f, [key]: e.target.value }));
 
   const handleSave = () => {
-    setClients((prev) =>
-      prev.map((c) =>
-        c.id === editingId
-          ? { ...c, ...form, activeProjects: Number(form.activeProjects) || 0 }
-          : c
-      )
-    );
+    if (!form.company.trim()) return;
+
+    const initials = form.company
+      ? form.company
+          .split(" ")
+          .filter(Boolean)
+          .map((word) => word[0])
+          .join("")
+          .substring(0, 2)
+          .toUpperCase()
+      : "CL";
+
+    const contactInitials = form.contact
+      ? form.contact
+          .split(" ")
+          .filter(Boolean)
+          .map((word) => word[0])
+          .join("")
+          .substring(0, 2)
+          .toUpperCase()
+      : "NA";
+
+    if (editingId !== null) {
+      setClients((prev) =>
+        prev.map((c) =>
+          c.id === editingId
+            ? {
+                ...c,
+                ...form,
+                initials,
+                activeProjects: Number(form.activeProjects) || 0,
+              }
+            : c
+        )
+      );
+    } else {
+      const newClient = {
+        id: Date.now(),
+        ...form,
+        initials,
+        color: COLOR_OPTIONS[Math.floor(Math.random() * COLOR_OPTIONS.length)],
+        activeProjects: Number(form.activeProjects) || 0,
+        team: [contactInitials],
+      };
+      setClients((prev) => [newClient, ...prev]);
+    }
+
     closeModal();
+  };
+
+  const handleDelete = (id) => {
+    setClients((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  // Automated CSV Export Handler
+  const handleExportCSV = () => {
+    if (!filteredClients || filteredClients.length === 0) {
+      alert("No client records found to export.");
+      return;
+    }
+
+    // CSV Headers
+    const headers = [
+      "Company",
+      "Domain",
+      "Primary Contact",
+      "Contact Email",
+      "Industry",
+      "Active Projects",
+      "Status",
+    ];
+
+    // Escape double quotes and format row data
+    const rows = filteredClients.map((c) => [
+      `"${(c.company || "").replace(/"/g, '""')}"`,
+      `"${(c.domain || "").replace(/"/g, '""')}"`,
+      `"${(c.contact || "").replace(/"/g, '""')}"`,
+      `"${(c.contactEmail || "").replace(/"/g, '""')}"`,
+      `"${(c.industry || "").replace(/"/g, '""')}"`,
+      c.activeProjects || 0,
+      `"${(c.status || "").replace(/"/g, '""')}"`,
+    ]);
+
+    // Build standard CSV string with utf-8 BOM to preserve special characters in Excel
+    const csvContent =
+      "\uFEFF" +
+      [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
+
+    try {
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.setAttribute("download", `clients_${filter.toLowerCase()}_export.csv`);
+      document.body.appendChild(link);
+      
+      // Trigger click event
+      link.click();
+
+      // Clean up DOM references
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 200);
+    } catch (err) {
+      console.error("CSV Export failed:", err);
+    }
   };
 
   return (
@@ -215,7 +329,10 @@ export default function ClientsPage({ isDarkMode = true }) {
             Manage corporate relationships and active infrastructure projects.
           </p>
         </div>
-        <button className="flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2.5 text-xs font-semibold text-slate-950 transition-colors hover:bg-cyan-400">
+        <button
+          onClick={openCreateModal}
+          className="flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2.5 text-xs font-semibold text-slate-950 transition-colors hover:bg-cyan-400"
+        >
           <Plus size={16} strokeWidth={2.5} />
           Add Client
         </button>
@@ -270,11 +387,11 @@ export default function ClientsPage({ isDarkMode = true }) {
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">
-            <SlidersHorizontal size={14} />
-            Advanced Filters
-          </button>
-          <button className="flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800">
+          <button
+            type="button"
+            onClick={handleExportCSV}
+            className="flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-800 cursor-pointer active:scale-95 transition-all"
+          >
             <Download size={14} />
             Export CSV
           </button>
@@ -352,9 +469,6 @@ export default function ClientsPage({ isDarkMode = true }) {
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex items-center justify-end gap-3 text-slate-400">
-                    <button className="hover:text-cyan-400" aria-label="View">
-                      <Eye size={16} />
-                    </button>
                     <button
                       onClick={() => openEditModal(client)}
                       className="hover:text-cyan-400"
@@ -363,6 +477,7 @@ export default function ClientsPage({ isDarkMode = true }) {
                       <Pencil size={16} />
                     </button>
                     <button
+                      onClick={() => handleDelete(client.id)}
                       className="hover:text-rose-400"
                       aria-label="Delete"
                     >
@@ -412,12 +527,12 @@ export default function ClientsPage({ isDarkMode = true }) {
         </div>
       </div>
 
-      {/* Edit Modal */}
+      {/* Create / Edit Modal */}
       <Modal
         open={modalOpen}
         onClose={closeModal}
-        title="Edit Client"
-        subtitle={form.company}
+        title={editingId !== null ? "Edit Client" : "Add Client"}
+        subtitle={editingId !== null ? form.company : "Enter client details below"}
         footer={
           <>
             <button
@@ -430,7 +545,7 @@ export default function ClientsPage({ isDarkMode = true }) {
               onClick={handleSave}
               className="rounded-lg bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-400"
             >
-              Save Changes
+              {editingId !== null ? "Save Changes" : "Create Client"}
             </button>
           </>
         }

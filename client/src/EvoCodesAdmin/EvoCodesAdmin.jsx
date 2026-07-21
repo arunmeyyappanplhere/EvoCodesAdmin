@@ -25,7 +25,7 @@ export default function EvoCodesAdmin() {
     return saved ? JSON.parse(saved) : INITIAL_PROJECTS;
   });
 
-  const [activeTab, setActiveTab] = useState('Projects');
+  const [activeTab, setActiveTab] = useState('Dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [globalSearch, setGlobalSearch] = useState('');

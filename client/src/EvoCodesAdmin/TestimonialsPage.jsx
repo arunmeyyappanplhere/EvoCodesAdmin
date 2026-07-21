@@ -21,6 +21,14 @@ const STATUS_STYLES = {
 };
 const FILTERS = ["All", ...STATUS_OPTIONS];
 
+const COLOR_PALETTES = [
+  "bg-cyan-500/20 text-cyan-300",
+  "bg-violet-500/20 text-violet-300",
+  "bg-emerald-500/20 text-emerald-300",
+  "bg-amber-500/20 text-amber-300",
+  "bg-rose-500/20 text-rose-300",
+];
+
 const TESTIMONIALS = [
   {
     id: 1,
@@ -136,12 +144,12 @@ function StarRating({ value }) {
   );
 }
 
-export default function TestimonialsPage({ isDarkMode }) {
+export default function TestimonialsPage({ isDarkMode = true }) {
   const [testimonials, setTestimonials] = useState(TESTIMONIALS);
   const [filter, setFilter] = useState("All");
   const [query, setQuery] = useState("");
 
-  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
 
@@ -162,6 +170,12 @@ export default function TestimonialsPage({ isDarkMode }) {
     return rows;
   }, [testimonials, filter, query]);
 
+  const openCreateModal = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+    setModalOpen(true);
+  };
+
   const openEditModal = (item) => {
     setEditingId(item.id);
     setForm({
@@ -173,11 +187,11 @@ export default function TestimonialsPage({ isDarkMode }) {
       date: item.date,
       status: item.status,
     });
-    setEditModalOpen(true);
+    setModalOpen(true);
   };
 
-  const closeEditModal = () => {
-    setEditModalOpen(false);
+  const closeModal = () => {
+    setModalOpen(false);
     setEditingId(null);
     setForm(emptyForm);
   };
@@ -185,26 +199,65 @@ export default function TestimonialsPage({ isDarkMode }) {
   const handleChange = (key) => (e) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
 
+  const formatDateDisplay = (rawDate) => {
+    if (!rawDate) {
+      return new Date().toLocaleDateString("en-US", {
+        month: "short",
+        day: "2-digit",
+        year: "numeric",
+      });
+    }
+    const parsed = new Date(rawDate);
+    if (isNaN(parsed.getTime())) return rawDate;
+    return parsed.toLocaleDateString("en-US", {
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+    });
+  };
+
   const handleSave = () => {
-    setTestimonials((prev) =>
-      prev.map((t) =>
-        t.id === editingId
-          ? {
-              ...t,
-              ...form,
-              rating: Number(form.rating),
-              initials: form.client
-                .split(" ")
-                .map((n) => n[0])
-                .filter(Boolean)
-                .slice(0, 2)
-                .join("")
-                .toUpperCase(),
-            }
-          : t
-      )
-    );
-    closeEditModal();
+    if (!form.client.trim() || !form.review.trim()) return;
+
+    const initials = form.client
+      .split(" ")
+      .map((n) => n[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "CL";
+
+    const displayDate = formatDateDisplay(form.date);
+
+    if (editingId !== null) {
+      // Edit Mode
+      setTestimonials((prev) =>
+        prev.map((t) =>
+          t.id === editingId
+            ? {
+                ...t,
+                ...form,
+                date: displayDate,
+                rating: Number(form.rating),
+                initials,
+              }
+            : t
+        )
+      );
+    } else {
+      // Add Mode
+      const newTestimonial = {
+        id: Date.now(),
+        ...form,
+        date: displayDate,
+        rating: Number(form.rating),
+        initials,
+        color: COLOR_PALETTES[Math.floor(Math.random() * COLOR_PALETTES.length)],
+      };
+      setTestimonials((prev) => [newTestimonial, ...prev]);
+    }
+
+    closeModal();
   };
 
   const confirmDelete = () => {
@@ -222,11 +275,14 @@ export default function TestimonialsPage({ isDarkMode }) {
           <h3 className={`text-xl md:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
             Client Testimonials
           </h3>
-          <p className="text-xs md:text-sm text-gray-500 mt-1">
+          <p className="text-xs md:text-sm text-slate-500 mt-1">
             Review, edit, and moderate client feedback on delivered projects.
           </p>
         </div>
-        <button className="flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-xs font-bold text-slate-950 transition-colors hover:bg-cyan-400">
+        <button
+          onClick={openCreateModal}
+          className="flex items-center justify-center gap-2 rounded-lg bg-cyan-500 px-4 py-2 text-xs font-bold text-slate-950 transition-colors hover:bg-cyan-400 cursor-pointer"
+        >
           <Plus size={16} strokeWidth={2.5} />
           Add Testimonial
         </button>
@@ -239,7 +295,9 @@ export default function TestimonialsPage({ isDarkMode }) {
           return (
             <div
               key={card.label}
-              className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"
+              className={`rounded-xl border p-4 ${
+                isDarkMode ? 'border-slate-800 bg-slate-900/60' : 'border-gray-200 bg-white shadow-sm'
+              }`}
             >
               <div className="flex items-center justify-between">
                 <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
@@ -254,14 +312,16 @@ export default function TestimonialsPage({ isDarkMode }) {
       </div>
 
       {/* Filters + search */}
-      <div className="flex flex-col sm:flex-row gap-4 items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-3">
+      <div className={`flex flex-col sm:flex-row gap-4 items-center justify-between rounded-xl border p-3 ${
+        isDarkMode ? 'border-slate-800 bg-slate-900/60' : 'border-gray-200 bg-white shadow-sm'
+      }`}>
         <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto">
           {FILTERS.map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
               className={[
-                "rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors whitespace-nowrap",
+                "rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors whitespace-nowrap cursor-pointer",
                 filter === f
                   ? "bg-cyan-500/10 text-cyan-400"
                   : "text-slate-400 hover:text-slate-200",
@@ -281,16 +341,24 @@ export default function TestimonialsPage({ isDarkMode }) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search client, company, or project..."
-            className="w-full rounded-lg border border-slate-700 bg-slate-800/60 py-2 pl-9 pr-3 text-sm text-slate-200 placeholder:text-slate-500 focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+            className={`w-full rounded-lg border py-2 pl-9 pr-3 text-sm focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500 ${
+              isDarkMode
+                ? 'border-slate-700 bg-slate-800/60 text-slate-200 placeholder:text-slate-500'
+                : 'border-gray-300 bg-white text-gray-800 placeholder:text-gray-400'
+            }`}
           />
         </div>
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/60">
+      <div className={`overflow-x-auto rounded-xl border ${
+        isDarkMode ? 'border-slate-800 bg-slate-900/60' : 'border-gray-200 bg-white shadow-sm'
+      }`}>
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-800 text-xs uppercase tracking-wider text-slate-500">
+            <tr className={`border-b text-xs uppercase tracking-wider ${
+              isDarkMode ? 'border-slate-800 text-slate-500' : 'border-gray-200 text-gray-500'
+            }`}>
               <th className="px-6 py-3.5 font-medium">Client</th>
               <th className="px-6 py-3.5 font-medium">Project</th>
               <th className="px-6 py-3.5 font-medium">Rating</th>
@@ -300,9 +368,9 @@ export default function TestimonialsPage({ isDarkMode }) {
               <th className="px-6 py-3.5 text-right font-medium">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800/70">
+          <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800/70' : 'divide-gray-100'}`}>
             {filtered.map((item) => (
-              <tr key={item.id} className="hover:bg-slate-800/30">
+              <tr key={item.id} className={isDarkMode ? 'hover:bg-slate-800/30' : 'hover:bg-gray-50'}>
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-3">
                     <div
@@ -311,19 +379,19 @@ export default function TestimonialsPage({ isDarkMode }) {
                       {item.initials}
                     </div>
                     <div>
-                      <p className="font-semibold text-slate-100">{item.client}</p>
+                      <p className={`font-semibold ${isDarkMode ? 'text-slate-100' : 'text-gray-900'}`}>{item.client}</p>
                       <p className="text-xs text-slate-500">{item.company}</p>
                     </div>
                   </div>
                 </td>
-                <td className="px-6 py-4 text-slate-300">{item.project}</td>
+                <td className={`px-6 py-4 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>{item.project}</td>
                 <td className="px-6 py-4">
                   <StarRating value={item.rating} />
                 </td>
                 <td className="max-w-xs px-6 py-4">
                   <p className="line-clamp-2 text-slate-400">{item.review}</p>
                 </td>
-                <td className="px-6 py-4 text-slate-400">{item.date}</td>
+                <td className="px-6 py-4 text-slate-400 whitespace-nowrap">{item.date}</td>
                 <td className="px-6 py-4">
                   <span
                     className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[item.status]}`}
@@ -336,14 +404,14 @@ export default function TestimonialsPage({ isDarkMode }) {
                   <div className="flex items-center justify-end gap-3 text-slate-400">
                     <button
                       onClick={() => openEditModal(item)}
-                      className="hover:text-cyan-400"
+                      className="hover:text-cyan-400 cursor-pointer transition-colors"
                       aria-label="Edit testimonial"
                     >
                       <Pencil size={16} />
                     </button>
                     <button
                       onClick={() => setDeleteTarget(item)}
-                      className="hover:text-rose-400"
+                      className="hover:text-rose-400 cursor-pointer transition-colors"
                       aria-label="Delete testimonial"
                     >
                       <Trash2 size={16} />
@@ -363,46 +431,52 @@ export default function TestimonialsPage({ isDarkMode }) {
           </tbody>
         </table>
 
-        <div className="flex items-center justify-between border-t border-slate-800 px-6 py-3.5">
+        <div className={`flex items-center justify-between border-t px-6 py-3.5 ${
+          isDarkMode ? 'border-slate-800' : 'border-gray-200'
+        }`}>
           <p className="text-sm text-slate-500">
             Showing{" "}
-            <span className="font-medium text-slate-300">{filtered.length}</span> of{" "}
-            <span className="font-medium text-slate-300">{testimonials.length}</span>{" "}
+            <span className={`font-medium ${isDarkMode ? 'text-slate-300' : 'text-gray-900'}`}>{filtered.length}</span> of{" "}
+            <span className={`font-medium ${isDarkMode ? 'text-slate-300' : 'text-gray-900'}`}>{testimonials.length}</span>{" "}
             testimonials
           </p>
           <div className="flex items-center gap-1">
-            <button className="rounded-md p-1.5 text-slate-500 hover:bg-slate-800">
+            <button className="rounded-md p-1.5 text-slate-500 hover:bg-slate-800 cursor-pointer">
               <ChevronLeft size={16} />
             </button>
             <button className="h-7 w-7 rounded-md bg-cyan-500 text-sm font-medium text-slate-950">
               1
             </button>
-            <button className="rounded-md p-1.5 text-slate-500 hover:bg-slate-800">
+            <button className="rounded-md p-1.5 text-slate-500 hover:bg-slate-800 cursor-pointer">
               <ChevronRight size={16} />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Edit modal */}
+      {/* Add / Edit Modal */}
       <Modal
-        open={editModalOpen}
-        onClose={closeEditModal}
-        title="Edit Testimonial"
-        subtitle={`${form.client}${form.company ? " · " + form.company : ""}`}
+        open={modalOpen}
+        onClose={closeModal}
+        title={editingId !== null ? "Edit Testimonial" : "Add Testimonial"}
+        subtitle={
+          editingId !== null
+            ? `${form.client}${form.company ? " · " + form.company : ""}`
+            : "Create a new client review"
+        }
         footer={
           <>
             <button
-              onClick={closeEditModal}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800"
+              onClick={closeModal}
+              className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800 cursor-pointer"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400"
+              className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400 cursor-pointer"
             >
-              Save Changes
+              {editingId !== null ? "Save Changes" : "Create Testimonial"}
             </button>
           </>
         }
@@ -413,6 +487,7 @@ export default function TestimonialsPage({ isDarkMode }) {
               type="text"
               value={form.client}
               onChange={handleChange("client")}
+              placeholder="e.g. Sarah Jenkins"
               className={inputClass}
             />
           </Field>
@@ -421,6 +496,7 @@ export default function TestimonialsPage({ isDarkMode }) {
               type="text"
               value={form.company}
               onChange={handleChange("company")}
+              placeholder="e.g. NexGen Systems"
               className={inputClass}
             />
           </Field>
@@ -430,6 +506,7 @@ export default function TestimonialsPage({ isDarkMode }) {
                 type="text"
                 value={form.project}
                 onChange={handleChange("project")}
+                placeholder="e.g. Cloud Migration Platform"
                 className={inputClass}
               />
             </Field>
@@ -449,10 +526,9 @@ export default function TestimonialsPage({ isDarkMode }) {
           </Field>
           <Field label="Date">
             <input
-              type="text"
+              type="date"
               value={form.date}
               onChange={handleChange("date")}
-              placeholder="Jul 02, 2026"
               className={inputClass}
             />
           </Field>
@@ -461,6 +537,7 @@ export default function TestimonialsPage({ isDarkMode }) {
               <textarea
                 value={form.review}
                 onChange={handleChange("review")}
+                placeholder="Write client review..."
                 rows={4}
                 className={inputClass}
               />
@@ -484,7 +561,7 @@ export default function TestimonialsPage({ isDarkMode }) {
         </div>
       </Modal>
 
-      {/* Delete confirmation */}
+      {/* Delete Confirmation Modal */}
       <Modal
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
@@ -494,13 +571,13 @@ export default function TestimonialsPage({ isDarkMode }) {
           <>
             <button
               onClick={() => setDeleteTarget(null)}
-              className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800"
+              className="rounded-lg border border-slate-700 px-4 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800 cursor-pointer"
             >
               Cancel
             </button>
             <button
               onClick={confirmDelete}
-              className="rounded-lg bg-rose-500 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-400"
+              className="rounded-lg bg-rose-500 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-400 cursor-pointer"
             >
               Delete
             </button>

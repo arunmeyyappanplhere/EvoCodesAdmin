@@ -1,5 +1,19 @@
-import React, { useState } from 'react';
-import { Search, UserPlus, SlidersHorizontal, Download, ChevronLeft, ChevronRight, MoreVertical, Terminal, Palette, Megaphone, Briefcase, X, Pencil, Trash2 } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { 
+  Search, 
+  UserPlus, 
+  SlidersHorizontal, 
+  Download, 
+  ChevronLeft, 
+  ChevronRight, 
+  Terminal, 
+  Palette, 
+  Megaphone, 
+  Briefcase, 
+  X, 
+  Pencil, 
+  Trash2 
+} from 'lucide-react';
 
 const INITIAL_EMPLOYEES = [
   { id: 1, name: 'Alex Thorne', position: 'Principal Engineer', department: 'Engineering', email: 'a.thorne@evocodes.ai', status: 'ACTIVE', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=60' },
@@ -10,7 +24,14 @@ const INITIAL_EMPLOYEES = [
 
 const DEPARTMENTS = ['All Departments', 'Engineering', 'Design', 'Marketing', 'Operations'];
 
-const emptyEmployeeForm = {
+const DEPARTMENT_STATS = [
+  { name: 'Engineering', count: 64, change: '+4 this month', progress: '65%', color: 'cyan', icon: Terminal },
+  { name: 'Design', count: 18, change: 'Stable', progress: '35%', color: 'emerald', icon: Palette },
+  { name: 'Marketing', count: 24, change: '+2 this month', progress: '45%', color: 'indigo', icon: Megaphone },
+  { name: 'Operations', count: 22, change: 'Stable', progress: '40%', color: 'amber', icon: Briefcase },
+];
+
+const EMPTY_EMPLOYEE_FORM = {
   name: '',
   position: '',
   department: 'Engineering',
@@ -19,28 +40,41 @@ const emptyEmployeeForm = {
   avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=60'
 };
 
-export default function TeamManagementTable({ isDarkMode }) {
+const ITEMS_PER_PAGE = 5;
+
+export default function TeamManagementTable({ isDarkMode = true }) {
   const [employees, setEmployees] = useState(INITIAL_EMPLOYEES);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDept, setSelectedDept] = useState('All Departments');
+  const [currentPage, setCurrentPage] = useState(1);
   
-  // Modal state
+  // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployeeId, setEditingEmployeeId] = useState(null);
-  const [form, setForm] = useState(emptyEmployeeForm);
+  const [form, setForm] = useState(EMPTY_EMPLOYEE_FORM);
 
-  // Filtering Logic
-  const filteredEmployees = employees.filter(emp => {
-    const matchesSearch = emp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          emp.position.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          emp.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesDept = selectedDept === 'All Departments' || emp.department === selectedDept;
-    return matchesSearch && matchesDept;
-  });
+  // Filtered dataset
+  const filteredEmployees = useMemo(() => {
+    return employees.filter(emp => {
+      const query = searchQuery.toLowerCase();
+      const matchesSearch = emp.name.toLowerCase().includes(query) ||
+                            emp.position.toLowerCase().includes(query) ||
+                            emp.email.toLowerCase().includes(query);
+      const matchesDept = selectedDept === 'All Departments' || emp.department === selectedDept;
+      return matchesSearch && matchesDept;
+    });
+  }, [employees, searchQuery, selectedDept]);
+
+  // Pagination bounds
+  const totalPages = Math.ceil(filteredEmployees.length / ITEMS_PER_PAGE) || 1;
+  const paginatedEmployees = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredEmployees.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredEmployees, currentPage]);
 
   const openAddModal = () => {
     setEditingEmployeeId(null);
-    setForm(emptyEmployeeForm);
+    setForm(EMPTY_EMPLOYEE_FORM);
     setIsModalOpen(true);
   };
 
@@ -53,12 +87,12 @@ export default function TeamManagementTable({ isDarkMode }) {
   const closeModal = () => {
     setIsModalOpen(false);
     setEditingEmployeeId(null);
-    setForm(emptyEmployeeForm);
+    setForm(EMPTY_EMPLOYEE_FORM);
   };
 
   const handleSave = (e) => {
     e.preventDefault();
-    if (!form.name || !form.email) return;
+    if (!form.name.trim() || !form.email.trim()) return;
 
     if (editingEmployeeId) {
       setEmployees(prev => prev.map(emp => emp.id === editingEmployeeId ? { ...emp, ...form } : emp));
@@ -69,14 +103,26 @@ export default function TeamManagementTable({ isDarkMode }) {
   };
 
   const handleDelete = (id) => {
-    if (confirm("Are you sure you want to remove this employee?")) {
+    if (window.confirm("Are you sure you want to remove this employee?")) {
       setEmployees(prev => prev.filter(emp => emp.id !== id));
     }
   };
 
+  const exportToCSV = () => {
+    const headers = ["ID,Name,Position,Department,Email,Status\n"];
+    const rows = filteredEmployees.map(e => `${e.id},"${e.name}","${e.position}","${e.department}","${e.email}",${e.status}`);
+    const blob = new Blob([headers.concat(rows.join("\n")).join("")], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'team-members.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-8">
-      {/* Top Heading Panel */}
+      {/* Header Panel */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h3 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Team Management</h3>
@@ -90,7 +136,7 @@ export default function TeamManagementTable({ isDarkMode }) {
         </button>
       </div>
 
-      {/* Filter and Search Actions Row */}
+      {/* Action Controls Row */}
       <div className="flex flex-col sm:flex-row items-center gap-3 text-xs">
         <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border w-full sm:flex-1 ${
           isDarkMode ? 'bg-[#0f1422] border-[#1e2640]' : 'bg-white border-gray-200'
@@ -100,15 +146,21 @@ export default function TeamManagementTable({ isDarkMode }) {
             type="text" 
             placeholder="Search by name, position or email..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="bg-transparent border-none p-0 w-full focus:ring-0 placeholder-gray-600 text-gray-300"
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="bg-transparent border-none p-0 w-full focus:ring-0 placeholder-gray-600 text-gray-300 focus:outline-none"
           />
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
           <select 
             value={selectedDept}
-            onChange={(e) => setSelectedDept(e.target.value)}
+            onChange={(e) => {
+              setSelectedDept(e.target.value);
+              setCurrentPage(1);
+            }}
             className={`px-3 py-2 rounded-lg border font-medium focus:ring-0 cursor-pointer ${
               isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-gray-300' : 'bg-white border-gray-200 text-gray-700'
             }`}
@@ -118,21 +170,20 @@ export default function TeamManagementTable({ isDarkMode }) {
             ))}
           </select>
 
-          <button className={`p-2 rounded-lg border transition-all cursor-pointer ${
-            isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-gray-400 hover:text-white' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-          }`}>
-            <SlidersHorizontal size={14} />
-          </button>
 
-          <button className={`p-2 rounded-lg border transition-all cursor-pointer ${
-            isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-gray-400 hover:text-white' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-          }`}>
+          <button 
+            onClick={exportToCSV}
+            aria-label="Export to CSV"
+            className={`p-2 rounded-lg border transition-all cursor-pointer ${
+              isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-gray-400 hover:text-white' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
             <Download size={14} />
           </button>
         </div>
       </div>
 
-      {/* Grid Data Container */}
+      {/* Main Table Grid */}
       <div className={`rounded-xl border overflow-hidden transition-colors w-full ${
         isDarkMode ? 'bg-[#0f1422] border-[#1e2640]' : 'bg-white border-gray-200'
       }`}>
@@ -152,12 +203,12 @@ export default function TeamManagementTable({ isDarkMode }) {
               </tr>
             </thead>
             <tbody className={`divide-y text-sm ${isDarkMode ? 'divide-[#1e2640]/50' : 'divide-gray-200'}`}>
-              {filteredEmployees.length === 0 ? (
+              {paginatedEmployees.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="py-12 text-center text-gray-500 text-xs">No matching team members found.</td>
                 </tr>
               ) : (
-                filteredEmployees.map((emp) => (
+                paginatedEmployees.map((emp) => (
                   <tr key={emp.id} className={`transition-colors ${isDarkMode ? 'hover:bg-[#141b2d]' : 'hover:bg-gray-50'}`}>
                     <td className="py-4 px-6">
                       <img src={emp.avatar} alt={emp.name} className="w-8 h-8 object-cover rounded-full border border-[#222f54]" />
@@ -185,10 +236,10 @@ export default function TeamManagementTable({ isDarkMode }) {
                     </td>
                     <td className="py-4 px-6 text-right text-gray-500">
                       <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => openEditModal(emp)} className="p-1 rounded hover:text-cyan-400 transition-colors cursor-pointer">
+                        <button onClick={() => openEditModal(emp)} className="p-1 rounded hover:text-cyan-400 transition-colors cursor-pointer" aria-label="Edit employee">
                           <Pencil size={15} />
                         </button>
-                        <button onClick={() => handleDelete(emp.id)} className="p-1 rounded hover:text-rose-400 transition-colors cursor-pointer">
+                        <button onClick={() => handleDelete(emp.id)} className="p-1 rounded hover:text-rose-400 transition-colors cursor-pointer" aria-label="Delete employee">
                           <Trash2 size={15} />
                         </button>
                       </div>
@@ -200,193 +251,198 @@ export default function TeamManagementTable({ isDarkMode }) {
           </table>
         </div>
 
-        {/* Pagination Block */}
+        {/* Pagination Bar */}
         <div className={`p-4 flex flex-col sm:flex-row gap-4 items-center justify-between text-xs text-gray-500 border-t ${
           isDarkMode ? 'bg-[#131a2e]/60 border-[#1e2640]' : 'bg-gray-50 border-gray-200'
         }`}>
-          <div>Showing <span className={`${isDarkMode ? 'text-gray-300' : 'text-gray-700'} font-semibold`}>1 to {filteredEmployees.length}</span> of <span className={`${isDarkMode ? 'text-gray-300' : 'text-gray-700'} font-semibold`}>{employees.length}</span> employees</div>
-          <div className="flex gap-1">
-            <button className="p-1.5 rounded border border-[#222f54] text-gray-500 hover:text-white cursor-pointer"><ChevronLeft size={14} /></button>
-            <button className="px-2.5 py-1 rounded font-bold bg-[#4cc9f0] text-[#0b0f17]">1</button>
-            <button className="p-1.5 rounded border border-[#222f54] text-gray-500 hover:text-white cursor-pointer"><ChevronRight size={14} /></button>
+          <div>
+            Showing <span className={`${isDarkMode ? 'text-gray-300' : 'text-gray-700'} font-semibold`}>
+              {filteredEmployees.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredEmployees.length)}
+            </span> of <span className={`${isDarkMode ? 'text-gray-300' : 'text-gray-700'} font-semibold`}>{filteredEmployees.length}</span> entries
+          </div>
+          <div className="flex gap-1 items-center">
+            <button 
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              className="p-1.5 rounded border border-[#222f54] text-gray-500 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <span className="px-3 py-1 text-xs font-semibold text-gray-300">
+              {currentPage} / {totalPages}
+            </span>
+            <button 
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              className="p-1.5 rounded border border-[#222f54] text-gray-500 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <ChevronRight size={14} />
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Department Distribution Widgets */}
+      {/* Department Cards Grid */}
       <div className="space-y-4 pt-4">
         <h4 className={`text-sm font-bold uppercase tracking-wider ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
           Department Distribution
         </h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          
-          {/* Engineering */}
-          <div className={`p-4 rounded-xl border flex flex-col justify-between ${isDarkMode ? 'bg-[#0f1422] border-[#1e2640]' : 'bg-white border-gray-200'}`}>
-            <div className="flex items-center justify-between">
-              <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400"><Terminal size={16} /></div>
-              <span className="text-[10px] text-cyan-400 font-semibold bg-cyan-500/5 px-2 py-0.5 rounded-full">+4 this month</span>
-            </div>
-            <div className="mt-4">
-              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Engineering</p>
-              <h5 className={`text-2xl font-black mt-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>64</h5>
-            </div>
-            <div className="w-full bg-gray-800 h-1 rounded-full mt-3 overflow-hidden">
-              <div className="bg-cyan-400 h-full w-[65%]" />
-            </div>
-          </div>
-
-          {/* Design */}
-          <div className={`p-4 rounded-xl border flex flex-col justify-between ${isDarkMode ? 'bg-[#0f1422] border-[#1e2640]' : 'bg-white border-gray-200'}`}>
-            <div className="flex items-center justify-between">
-              <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400"><Palette size={16} /></div>
-              <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-500/5 px-2 py-0.5 rounded-full">Stable</span>
-            </div>
-            <div className="mt-4">
-              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Design</p>
-              <h5 className={`text-2xl font-black mt-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>18</h5>
-            </div>
-            <div className="w-full bg-gray-800 h-1 rounded-full mt-3 overflow-hidden">
-              <div className="bg-emerald-400 h-full w-[35%]" />
-            </div>
-          </div>
-
-          {/* Marketing */}
-          <div className={`p-4 rounded-xl border flex flex-col justify-between ${isDarkMode ? 'bg-[#0f1422] border-[#1e2640]' : 'bg-white border-gray-200'}`}>
-            <div className="flex items-center justify-between">
-              <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-400"><Megaphone size={16} /></div>
-              <span className="text-[10px] text-indigo-400 font-semibold bg-indigo-500/5 px-2 py-0.5 rounded-full">+2 this month</span>
-            </div>
-            <div className="mt-4">
-              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Marketing</p>
-              <h5 className={`text-2xl font-black mt-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>24</h5>
-            </div>
-            <div className="w-full bg-gray-800 h-1 rounded-full mt-3 overflow-hidden">
-              <div className="bg-indigo-400 h-full w-[45%]" />
-            </div>
-          </div>
-
-          {/* Operations */}
-          <div className={`p-4 rounded-xl border flex flex-col justify-between ${isDarkMode ? 'bg-[#0f1422] border-[#1e2640]' : 'bg-white border-gray-200'}`}>
-            <div className="flex items-center justify-between">
-              <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400"><Briefcase size={16} /></div>
-              <span className="text-[10px] text-amber-400 font-semibold bg-amber-500/5 px-2 py-0.5 rounded-full">Stable</span>
-            </div>
-            <div className="mt-4">
-              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Operations</p>
-              <h5 className={`text-2xl font-black mt-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>22</h5>
-            </div>
-            <div className="w-full bg-gray-800 h-1 rounded-full mt-3 overflow-hidden">
-              <div className="bg-amber-400 h-full w-[40%]" />
-            </div>
-          </div>
-
+          {DEPARTMENT_STATS.map((dept) => (
+            <DepartmentCard key={dept.name} dept={dept} isDarkMode={isDarkMode} />
+          ))}
         </div>
       </div>
 
-      {/* Employee Modal */}
+      {/* CRUD Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className={`w-full max-w-lg rounded-xl border p-6 space-y-4 shadow-2xl relative ${
-            isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-gray-200' : 'bg-white border-gray-200 text-gray-800'
-          }`}>
-            <div className="flex items-center justify-between pb-2 border-b border-gray-700/50">
-              <h4 className="text-lg font-bold">{editingEmployeeId ? "Edit Employee" : "Add New Employee"}</h4>
-              <button onClick={closeModal} className="text-gray-400 hover:text-white transition-colors cursor-pointer">
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSave} className="grid grid-cols-2 gap-4 text-xs">
-              <div className="col-span-2 space-y-1">
-                <label className="text-gray-400 font-medium">Full Name</label>
-                <input
-                  type="text"
-                  required
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="e.g. Alex Thorne"
-                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${
-                    isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
-                  }`}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-gray-400 font-medium">Position / Role</label>
-                <input
-                  type="text"
-                  required
-                  value={form.position}
-                  onChange={(e) => setForm({ ...form, position: e.target.value })}
-                  placeholder="e.g. Lead Developer"
-                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${
-                    isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
-                  }`}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-gray-400 font-medium">Department</label>
-                <select
-                  value={form.department}
-                  onChange={(e) => setForm({ ...form, department: e.target.value })}
-                  className={`w-full p-2.5 rounded-lg border focus:ring-0 ${
-                    isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-white' : 'bg-white border-gray-300 text-gray-900'
-                  }`}
-                >
-                  {DEPARTMENTS.filter(d => d !== 'All Departments').map(dept => (
-                    <option key={dept} value={dept}>{dept}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="col-span-2 space-y-1">
-                <label className="text-gray-400 font-medium">Email Address</label>
-                <input
-                  type="email"
-                  required
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  placeholder="a.thorne@evocodes.ai"
-                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${
-                    isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
-                  }`}
-                />
-              </div>
-
-              <div className="col-span-2 space-y-1">
-                <label className="text-gray-400 font-medium">Status</label>
-                <select
-                  value={form.status}
-                  onChange={(e) => setForm({ ...form, status: e.target.value })}
-                  className={`w-full p-2.5 rounded-lg border focus:ring-0 ${
-                    isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-white' : 'bg-white border-gray-300 text-gray-900'
-                  }`}
-                >
-                  <option value="ACTIVE">ACTIVE</option>
-                  <option value="ON LEAVE">ON LEAVE</option>
-                </select>
-              </div>
-
-              <div className="col-span-2 flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="px-4 py-2 rounded-lg border border-gray-700 text-xs font-medium hover:bg-gray-800 transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 rounded-lg bg-[#72efdd] text-[#0b0f17] text-xs font-bold hover:bg-[#52e3d0] transition-colors cursor-pointer"
-                >
-                  Save Member
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <EmployeeModal 
+          isDarkMode={isDarkMode}
+          editingEmployeeId={editingEmployeeId}
+          form={form}
+          setForm={setForm}
+          onClose={closeModal}
+          onSave={handleSave}
+        />
       )}
+    </div>
+  );
+}
+
+function DepartmentCard({ dept, isDarkMode }) {
+  const Icon = dept.icon;
+  const colorMap = {
+    cyan: 'bg-cyan-500/10 text-cyan-400 bg-cyan-400',
+    emerald: 'bg-emerald-500/10 text-emerald-400 bg-emerald-400',
+    indigo: 'bg-indigo-500/10 text-indigo-400 bg-indigo-400',
+    amber: 'bg-amber-500/10 text-amber-400 bg-amber-400',
+  };
+
+  const [bgAlpha, textColor, barBg] = colorMap[dept.color].split(' ');
+
+  return (
+    <div className={`p-4 rounded-xl border flex flex-col justify-between ${isDarkMode ? 'bg-[#0f1422] border-[#1e2640]' : 'bg-white border-gray-200'}`}>
+      <div className="flex items-center justify-between">
+        <div className={`p-2 rounded-lg ${bgAlpha} ${textColor}`}>
+          <Icon size={16} />
+        </div>
+        <span className={`text-[10px] ${textColor} font-semibold bg-white/5 px-2 py-0.5 rounded-full`}>
+          {dept.change}
+        </span>
+      </div>
+      <div className="mt-4">
+        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">{dept.name}</p>
+        <h5 className={`text-2xl font-black mt-1 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{dept.count}</h5>
+      </div>
+      <div className="w-full bg-gray-800 h-1 rounded-full mt-3 overflow-hidden">
+        <div className={`${barBg} h-full`} style={{ width: dept.progress }} />
+      </div>
+    </div>
+  );
+}
+
+function EmployeeModal({ isDarkMode, editingEmployeeId, form, setForm, onClose, onSave }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className={`w-full max-w-lg rounded-xl border p-6 space-y-4 shadow-2xl relative ${
+        isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-gray-200' : 'bg-white border-gray-200 text-gray-800'
+      }`}>
+        <div className="flex items-center justify-between pb-2 border-b border-gray-700/50">
+          <h4 className="text-lg font-bold">{editingEmployeeId ? "Edit Employee" : "Add New Employee"}</h4>
+          <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors cursor-pointer" aria-label="Close modal">
+            <X size={18} />
+          </button>
+        </div>
+
+        <form onSubmit={onSave} className="grid grid-cols-2 gap-4 text-xs">
+          <div className="col-span-2 space-y-1">
+            <label className="text-gray-400 font-medium">Full Name</label>
+            <input
+              type="text"
+              required
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="e.g. Alex Thorne"
+              className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 focus:outline-none ${
+                isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
+              }`}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-gray-400 font-medium">Position / Role</label>
+            <input
+              type="text"
+              required
+              value={form.position}
+              onChange={(e) => setForm({ ...form, position: e.target.value })}
+              placeholder="e.g. Lead Developer"
+              className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 focus:outline-none ${
+                isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
+              }`}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-gray-400 font-medium">Department</label>
+            <select
+              value={form.department}
+              onChange={(e) => setForm({ ...form, department: e.target.value })}
+              className={`w-full p-2.5 rounded-lg border focus:ring-0 focus:outline-none ${
+                isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-white' : 'bg-white border-gray-300 text-gray-900'
+              }`}
+            >
+              {DEPARTMENTS.filter(d => d !== 'All Departments').map(dept => (
+                <option key={dept} value={dept}>{dept}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="col-span-2 space-y-1">
+            <label className="text-gray-400 font-medium">Email Address</label>
+            <input
+              type="email"
+              required
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              placeholder="a.thorne@evocodes.ai"
+              className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 focus:outline-none ${
+                isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
+              }`}
+            />
+          </div>
+
+          <div className="col-span-2 space-y-1">
+            <label className="text-gray-400 font-medium">Status</label>
+            <select
+              value={form.status}
+              onChange={(e) => setForm({ ...form, status: e.target.value })}
+              className={`w-full p-2.5 rounded-lg border focus:ring-0 focus:outline-none ${
+                isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-white' : 'bg-white border-gray-300 text-gray-900'
+              }`}
+            >
+              <option value="ACTIVE">ACTIVE</option>
+              <option value="ON LEAVE">ON LEAVE</option>
+            </select>
+          </div>
+
+          <div className="col-span-2 flex items-center justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg border border-gray-700 text-xs font-medium hover:bg-gray-800 transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 rounded-lg bg-[#72efdd] text-[#0b0f17] text-xs font-bold hover:bg-[#52e3d0] transition-colors cursor-pointer"
+            >
+              Save Member
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

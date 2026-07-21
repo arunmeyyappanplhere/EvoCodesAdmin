@@ -5,15 +5,14 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
-  TrendingUp,
   Server,
   BarChart3,
   ShieldCheck,
   Cloud,
-  ArrowUpRight,
+  Layers,
 } from "lucide-react";
 
-const FILTERS = ["All Services", "Active", "Maintenance", "Legacy"];
+const FILTERS = ["All Services", "Active", "Maintenance", "Disabled", "Legacy"];
 
 const INITIAL_SERVICES = [
   {
@@ -74,32 +73,6 @@ const STATUS_STYLES = {
   Legacy: "bg-slate-500/10 text-slate-400",
 };
 
-const SUMMARY_CARDS = [
-  {
-    label: "Revenue Impact",
-    value: "+14.2%",
-    icon: TrendingUp,
-    tone: "text-emerald-400",
-    note: "Services adoption increasing across Cloud and API verticals.",
-  },
-  {
-    label: "Active Assets",
-    value: "18",
-    unit: "Deployed",
-    icon: Server,
-    tone: "text-cyan-400",
-    note: "6 new services currently in the staging/review pipeline.",
-  },
-  {
-    label: "System Health",
-    value: "99.9%",
-    unit: "Optimum",
-    icon: ShieldCheck,
-    tone: "text-emerald-400",
-    note: "Global edge network functioning within nominal latency bounds.",
-  },
-];
-
 const STATUS_OPTIONS = ["Active", "Maintenance", "Disabled", "Legacy"];
 
 const emptyServiceForm = {
@@ -112,12 +85,23 @@ const emptyServiceForm = {
   status: STATUS_OPTIONS[0],
 };
 
-export default function ServicesPage({ isDarkMode }) {
+export default function ServicesPage({ isDarkMode = true }) {
   const [services, setServices] = useState(INITIAL_SERVICES);
   const [filter, setFilter] = useState("All Services");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyServiceForm);
+
+  const serviceCounts = useMemo(() => {
+    return services.reduce(
+      (acc, service) => {
+        acc.total += 1;
+        acc[service.status] = (acc[service.status] || 0) + 1;
+        return acc;
+      },
+      { total: 0, Active: 0, Maintenance: 0, Disabled: 0, Legacy: 0 }
+    );
+  }, [services]);
 
   const filteredServices = useMemo(() => {
     if (filter === "All Services") return services;
@@ -196,7 +180,7 @@ export default function ServicesPage({ isDarkMode }) {
       {/* Top Heading Panel */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h3 className={`text-xl md:text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+          <h3 className={`text-xl md:text-2xl font-bold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
             Services Management
           </h3>
           <p className="text-xs md:text-sm text-gray-500 mt-1">
@@ -211,24 +195,63 @@ export default function ServicesPage({ isDarkMode }) {
         </button>
       </div>
 
+      {/* Dynamic Summary Stats Bar */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className={`p-4 rounded-xl border ${isDarkMode ? "bg-[#0f1422] border-[#1e2640]" : "bg-white border-gray-200"}`}>
+          <div className="flex items-center justify-between text-gray-400">
+            <span className="text-xs font-medium uppercase tracking-wider">Total Services</span>
+            <Layers size={16} className="text-cyan-400" />
+          </div>
+          <p className={`text-2xl font-bold mt-2 ${isDarkMode ? "text-white" : "text-gray-900"}`}>{serviceCounts.total}</p>
+        </div>
+
+        <div className={`p-4 rounded-xl border ${isDarkMode ? "bg-[#0f1422] border-[#1e2640]" : "bg-white border-gray-200"}`}>
+          <div className="flex items-center justify-between text-gray-400">
+            <span className="text-xs font-medium uppercase tracking-wider">Active</span>
+            <Server size={16} className="text-emerald-400" />
+          </div>
+          <p className="text-2xl font-bold mt-2 text-emerald-400">{serviceCounts.Active}</p>
+        </div>
+
+        <div className={`p-4 rounded-xl border ${isDarkMode ? "bg-[#0f1422] border-[#1e2640]" : "bg-white border-gray-200"}`}>
+          <div className="flex items-center justify-between text-gray-400">
+            <span className="text-xs font-medium uppercase tracking-wider">Maintenance</span>
+            <BarChart3 size={16} className="text-amber-400" />
+          </div>
+          <p className="text-2xl font-bold mt-2 text-amber-400">{serviceCounts.Maintenance}</p>
+        </div>
+
+        <div className={`p-4 rounded-xl border ${isDarkMode ? "bg-[#0f1422] border-[#1e2640]" : "bg-white border-gray-200"}`}>
+          <div className="flex items-center justify-between text-gray-400">
+            <span className="text-xs font-medium uppercase tracking-wider">Disabled</span>
+            <ShieldCheck size={16} className="text-rose-400" />
+          </div>
+          <p className="text-2xl font-bold mt-2 text-rose-400">{serviceCounts.Disabled}</p>
+        </div>
+      </div>
+
       {/* Filters Bar */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
-        <div className={`flex items-center gap-1 p-1 rounded-xl border ${
-          isDarkMode ? 'bg-[#0f1422] border-[#1e2640]' : 'bg-white border-gray-200'
-        }`}>
-          {FILTERS.map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
-                filter === f
-                  ? "bg-cyan-500/10 text-cyan-400 font-bold"
-                  : "text-gray-400 hover:text-gray-200"
-              }`}
-            >
-              {f}
-            </button>
-          ))}
+        <div className={`flex items-center gap-1 p-1 rounded-xl border ${isDarkMode ? "bg-[#0f1422] border-[#1e2640]" : "bg-white border-gray-200"}`}>
+          {FILTERS.map((f) => {
+            const count = f === "All Services" ? serviceCounts.total : serviceCounts[f] || 0;
+            return (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 ${
+                  filter === f
+                    ? "bg-cyan-500/10 text-cyan-400 font-bold"
+                    : "text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                <span>{f}</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-cyan-500/10">
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
         <div className="flex items-center gap-4 text-gray-500">
           <span>Sort by: Newest</span>
@@ -237,15 +260,11 @@ export default function ServicesPage({ isDarkMode }) {
       </div>
 
       {/* Table Section */}
-      <div className={`rounded-xl border overflow-hidden transition-colors w-full ${
-        isDarkMode ? 'bg-[#0f1422] border-[#1e2640]' : 'bg-white border-gray-200'
-      }`}>
+      <div className={`rounded-xl border overflow-hidden transition-colors w-full ${isDarkMode ? "bg-[#0f1422] border-[#1e2640]" : "bg-white border-gray-200"}`}>
         <div className="overflow-x-auto w-full">
           <table className="w-full text-left text-sm border-collapse min-w-[800px]">
             <thead>
-              <tr className={`border-b text-[10px] uppercase font-bold tracking-wider text-gray-500 ${
-                isDarkMode ? 'bg-[#131a2e] border-[#1e2640]' : 'bg-gray-50 border-gray-200'
-              }`}>
+              <tr className={`border-b text-[10px] uppercase font-bold tracking-wider text-gray-500 ${isDarkMode ? "bg-[#131a2e] border-[#1e2640]" : "bg-gray-50 border-gray-200"}`}>
                 <th className="px-6 py-3.5">Icon</th>
                 <th className="px-6 py-3.5">Service Name</th>
                 <th className="px-6 py-3.5">Description</th>
@@ -255,18 +274,18 @@ export default function ServicesPage({ isDarkMode }) {
                 <th className="px-6 py-3.5 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className={`divide-y text-sm ${isDarkMode ? 'divide-[#1e2640]/50' : 'divide-gray-200'}`}>
+            <tbody className={`divide-y text-sm ${isDarkMode ? "divide-[#1e2640]/50" : "divide-gray-200"}`}>
               {filteredServices.map((service) => {
                 const Icon = service.icon || Server;
                 return (
-                  <tr key={service.id} className={`transition-colors ${isDarkMode ? 'hover:bg-[#141b2d]' : 'hover:bg-gray-50'}`}>
+                  <tr key={service.id} className={`transition-colors ${isDarkMode ? "hover:bg-[#141b2d]" : "hover:bg-gray-50"}`}>
                     <td className="px-6 py-4">
-                      <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${service.iconBg || 'bg-cyan-500/15 text-cyan-300'}`}>
+                      <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${service.iconBg || "bg-cyan-500/15 text-cyan-300"}`}>
                         <Icon size={18} />
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <p className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{service.name}</p>
+                      <p className={`font-semibold ${isDarkMode ? "text-white" : "text-gray-900"}`}>{service.name}</p>
                       <p className="text-[10px] uppercase tracking-wide text-gray-500">{service.category}</p>
                     </td>
                     <td className="max-w-xs px-6 py-4 text-xs text-gray-400">
@@ -278,7 +297,7 @@ export default function ServicesPage({ isDarkMode }) {
                           <span
                             key={feat}
                             className={`rounded px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide border ${
-                              isDarkMode ? 'bg-[#151c30] border-[#222f54] text-gray-300' : 'bg-gray-100 border-gray-200 text-gray-700'
+                              isDarkMode ? "bg-[#151c30] border-[#222f54] text-gray-300" : "bg-gray-100 border-gray-200 text-gray-700"
                             }`}
                           >
                             {feat}
@@ -313,52 +332,28 @@ export default function ServicesPage({ isDarkMode }) {
           </table>
         </div>
 
-        {/* Table Footer */}
-        <div className={`p-4 flex items-center justify-between text-xs text-gray-500 border-t ${
-          isDarkMode ? 'bg-[#131a2e]/60 border-[#1e2640]' : 'bg-gray-50 border-gray-200'
-        }`}>
-          <div className="flex items-center gap-1">
-            <button className="p-1 rounded border border-[#222f54] text-gray-500 hover:text-white"><ChevronLeft size={14} /></button>
-            <button className="px-2 py-0.5 rounded font-bold bg-cyan-400 text-[#0b0f17]">1</button>
-            <button className="p-1 rounded border border-[#222f54] text-gray-500 hover:text-white"><ChevronRight size={14} /></button>
+        {/* Table Footer - Standardized Layout (Left: Info, Right: Controls) */}
+        <div className={`p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs border-t ${isDarkMode ? "bg-[#131a2e]/60 border-[#1e2640] text-gray-400" : "bg-gray-50 border-gray-200 text-gray-600"}`}>
+          <p>
+            Showing <span className={`font-semibold ${isDarkMode ? "text-gray-200" : "text-gray-900"}`}>1–{filteredServices.length}</span> of{" "}
+            <span className={`font-semibold ${isDarkMode ? "text-gray-200" : "text-gray-900"}`}>{services.length}</span> services
+          </p>
+          <div className="flex items-center gap-1.5">
+            <button className={`p-1.5 rounded-lg border transition-colors ${isDarkMode ? "border-[#222f54] text-gray-400 hover:text-white hover:bg-[#1a233a]" : "border-gray-300 text-gray-600 hover:text-gray-900 hover:bg-gray-100"}`}>
+              <ChevronLeft size={14} />
+            </button>
+            <button className="px-2.5 py-1 rounded-lg font-bold bg-cyan-400 text-[#0b0f17]">1</button>
+            <button className={`p-1.5 rounded-lg border transition-colors ${isDarkMode ? "border-[#222f54] text-gray-400 hover:text-white hover:bg-[#1a233a]" : "border-gray-300 text-gray-600 hover:text-gray-900 hover:bg-gray-100"}`}>
+              <ChevronRight size={14} />
+            </button>
           </div>
-          <p>Jump to page <span className="font-semibold text-gray-300">1</span></p>
         </div>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-        {SUMMARY_CARDS.map((card) => {
-          const Icon = card.icon;
-          return (
-            <div key={card.label} className={`p-5 rounded-xl border flex flex-col justify-between ${
-              isDarkMode ? 'bg-[#0f1422] border-[#1e2640]' : 'bg-white border-gray-200'
-            }`}>
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{card.label}</p>
-                <Icon size={16} className={card.tone} />
-              </div>
-              <div className="mt-2 flex items-baseline gap-2">
-                <p className={`text-2xl font-black ${card.tone}`}>{card.value}</p>
-                {card.unit && (
-                  <span className="flex items-center gap-1 text-xs font-medium text-gray-400">
-                    {card.label === "Revenue Impact" && <ArrowUpRight size={12} className={card.tone} />}
-                    {card.unit}
-                  </span>
-                )}
-              </div>
-              <p className="mt-2 text-xs text-gray-500 leading-relaxed">{card.note}</p>
-            </div>
-          );
-        })}
       </div>
 
       {/* Service Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className={`w-full max-w-lg rounded-xl border p-6 space-y-4 shadow-2xl ${
-            isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-gray-200' : 'bg-white border-gray-200 text-gray-800'
-          }`}>
+          <div className={`w-full max-w-lg rounded-xl border p-6 space-y-4 shadow-2xl ${isDarkMode ? "bg-[#0f1422] border-[#1e2640] text-gray-200" : "bg-white border-gray-200 text-gray-800"}`}>
             <h4 className="text-lg font-bold">{editingId ? "Edit Service" : "Add Service"}</h4>
             
             <div className="grid grid-cols-2 gap-4 text-xs">
@@ -368,9 +363,7 @@ export default function ServicesPage({ isDarkMode }) {
                   type="text"
                   value={form.name}
                   onChange={handleChange("name")}
-                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${
-                    isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
-                  }`}
+                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${isDarkMode ? "border-[#1e2640] text-white" : "border-gray-300 text-gray-900"}`}
                 />
               </div>
               <div className="space-y-1">
@@ -380,9 +373,7 @@ export default function ServicesPage({ isDarkMode }) {
                   value={form.category}
                   onChange={handleChange("category")}
                   placeholder="e.g. Backend / Core"
-                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${
-                    isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
-                  }`}
+                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${isDarkMode ? "border-[#1e2640] text-white" : "border-gray-300 text-gray-900"}`}
                 />
               </div>
               <div className="col-span-2 space-y-1">
@@ -391,9 +382,7 @@ export default function ServicesPage({ isDarkMode }) {
                   value={form.description}
                   onChange={handleChange("description")}
                   rows={3}
-                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${
-                    isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
-                  }`}
+                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${isDarkMode ? "border-[#1e2640] text-white" : "border-gray-300 text-gray-900"}`}
                 />
               </div>
               <div className="col-span-2 space-y-1">
@@ -403,9 +392,7 @@ export default function ServicesPage({ isDarkMode }) {
                   value={form.features}
                   onChange={handleChange("features")}
                   placeholder="GraphQL, Redis, OAuth2"
-                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${
-                    isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
-                  }`}
+                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${isDarkMode ? "border-[#1e2640] text-white" : "border-gray-300 text-gray-900"}`}
                 />
               </div>
               <div className="space-y-1">
@@ -415,9 +402,7 @@ export default function ServicesPage({ isDarkMode }) {
                   value={form.price}
                   onChange={handleChange("price")}
                   placeholder="$4,500"
-                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${
-                    isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
-                  }`}
+                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${isDarkMode ? "border-[#1e2640] text-white" : "border-gray-300 text-gray-900"}`}
                 />
               </div>
               <div className="space-y-1">
@@ -427,9 +412,7 @@ export default function ServicesPage({ isDarkMode }) {
                   value={form.priceNote}
                   onChange={handleChange("priceNote")}
                   placeholder="Starting from"
-                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${
-                    isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
-                  }`}
+                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${isDarkMode ? "border-[#1e2640] text-white" : "border-gray-300 text-gray-900"}`}
                 />
               </div>
               <div className="col-span-2 space-y-1">
@@ -437,9 +420,7 @@ export default function ServicesPage({ isDarkMode }) {
                 <select
                   value={form.status}
                   onChange={handleChange("status")}
-                  className={`w-full p-2.5 rounded-lg border focus:ring-0 ${
-                    isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-white' : 'bg-white border-gray-300 text-gray-900'
-                  }`}
+                  className={`w-full p-2.5 rounded-lg border focus:ring-0 ${isDarkMode ? "bg-[#0f1422] border-[#1e2640] text-white" : "bg-white border-gray-300 text-gray-900"}`}
                 >
                   {STATUS_OPTIONS.map((opt) => (
                     <option key={opt} value={opt}>{opt}</option>
