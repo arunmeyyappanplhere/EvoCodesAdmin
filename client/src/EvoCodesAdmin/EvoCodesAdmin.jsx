@@ -12,6 +12,8 @@ import ServicesTable from './ServicesPage';
 import ClientsPage from './ClientsPage';
 import TestimonialsPage from './TestimonialsPage';
 import BlogsPage from './BlogsPage';
+import Dashboard from './Dashboard';
+import Analytics from './Analytics';
 
 const INITIAL_PROJECTS = [
   { id: 1, name: 'Nova Crypto Dashboard', version: 'v2.4.0', client: 'Stellar Ventures', category: 'Web App', tech: ['React', 'Tailwind', 'Node.js'], status: 'In Progress', image: 'https://images.unsplash.com/photo-1621761191319-c6fb62004040?w=80&auto=format&fit=crop&q=60' },
@@ -272,7 +274,11 @@ export default function EvoCodesAdmin() {
         </div>
 
         {/* Dynamic Route Display */}
-        {activeTab === 'Contact Requests' ? (
+        {activeTab === 'Dashboard' ? (
+          <Dashboard isDarkMode={isDarkMode} />
+        ) : activeTab === 'Analytics' ? (
+          <Analytics isDarkMode={isDarkMode} />
+        ) : activeTab === 'Contact Requests' ? (
           <div className="p-4 md:p-8 max-w-7xl w-full mx-auto">
             <ContactRequestsTable isDarkMode={isDarkMode} />
           </div>

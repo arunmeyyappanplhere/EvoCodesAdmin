@@ -1,2 +1,14 @@
 @import "tailwindcss";
 
+:root {
+  /* Evo Codes Dark Theme Base */
+  --bg-main: #0b0f17;
+  --bg-card: #0f1422;
+  --border-subtle: #1e2640;
+  --border-interactive: #222f54;
+
+  /* Accents */
+  --accent-cyan: #72efdd;
+  --accent-cyan-hover: #48e5c2;
+  --accent-rose: #f43f5e;
+}
