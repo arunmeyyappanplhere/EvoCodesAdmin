@@ -1,113 +1,139 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import * as LucideIcons from "lucide-react";
 import {
   Plus,
   Pencil,
   Trash2,
   ChevronLeft,
   ChevronRight,
-  Server,
-  BarChart3,
-  ShieldCheck,
-  Cloud,
   Layers,
+  Boxes,
+  Tags,
+  Loader2,
+  AlertCircle,
+  X,
 } from "lucide-react";
+import axiosInstance from "./api/Axiosinstance"; // adjust this path to wherever Axiosinstance.js actually lives
 
-const FILTERS = ["All Services", "Active", "Maintenance", "Disabled", "Legacy"];
-
-const INITIAL_SERVICES = [
-  {
-    id: 1,
-    name: "API Architecture",
-    category: "Backend / Core",
-    description: "High-concurrency GraphQL & REST gateway design.",
-    icon: Server,
-    iconBg: "bg-cyan-500/15 text-cyan-300",
-    features: ["GraphQL", "Redis", "OAuth2"],
-    price: "$4,500",
-    priceNote: "Starting from",
-    status: "Active",
-  },
-  {
-    id: 2,
-    name: "Data Visualization",
-    category: "Frontend / UX",
-    description: "Real-time d3.js powered dashboards and reporting.",
-    icon: BarChart3,
-    iconBg: "bg-amber-500/15 text-amber-300",
-    features: ["WebGL", "Canvas"],
-    price: "$3,200",
-    priceNote: "Flat fee",
-    status: "Maintenance",
-  },
-  {
-    id: 3,
-    name: "Identity Management",
-    category: "Security",
-    description: "Enterprise-grade auth, SSO, and access control.",
-    icon: ShieldCheck,
-    iconBg: "bg-rose-500/15 text-rose-300",
-    features: ["SAML", "Biometric"],
-    price: "$8,900",
-    priceNote: "Yearly license",
-    status: "Disabled",
-  },
-  {
-    id: 4,
-    name: "Hybrid Cloud CI/CD",
-    category: "Infrastructure",
-    description: "Automated multi-cloud deployment pipelines.",
-    icon: Cloud,
-    iconBg: "bg-sky-500/15 text-sky-300",
-    features: ["Docker", "K8S", "Terraform"],
-    price: "$12,000",
-    priceNote: "Enterprise",
-    status: "Active",
-  },
+// A curated shortlist shown in the icon picker's dropdown/autocomplete.
+// Admins can still type ANY valid lucide-react icon name (PascalCase) and it will work.
+const ICON_SUGGESTIONS = [
+  "Server", "Cloud", "ShieldCheck", "BarChart3", "Layers", "Database",
+  "Code", "Smartphone", "Globe", "Cpu", "Lock", "Zap", "Settings",
+  "Palette", "Rocket", "Terminal", "Network", "Boxes", "GitBranch",
+  "Workflow", "Bot", "LineChart", "PieChart", "Wrench", "Package",
+  "Layout", "MonitorSmartphone", "Webhook", "Braces", "Container",
 ];
 
-const STATUS_STYLES = {
-  Active: "bg-emerald-500/10 text-emerald-400",
-  Staging: "bg-amber-500/10 text-amber-400",
-  Maintenance: "bg-amber-500/10 text-amber-400",
-  Disabled: "bg-rose-500/10 text-rose-400",
-  Legacy: "bg-slate-500/10 text-slate-400",
-};
-
-const STATUS_OPTIONS = ["Active", "Maintenance", "Disabled", "Legacy"];
+const FALLBACK_ICON = "Server";
+const FALLBACK_COLOR = "#22d3ee"; // cyan-400
 
 const emptyServiceForm = {
-  name: "",
-  category: "",
-  description: "",
-  features: "",
-  price: "",
-  priceNote: "",
-  status: STATUS_OPTIONS[0],
+  serviceName: "",
+  serviceHead: "",
+  serviceDescription: "",
+  serviceIcon: FALLBACK_ICON,
+  serviceColor: FALLBACK_COLOR,
+  serviceTechStacks: "",
 };
 
+// Resolve a lucide-react icon component from a stored string name, e.g. "Cloud".
+// Falls back to Server if the name doesn't exist (typo, old data, etc).
+function getIconComponent(name) {
+  return LucideIcons[name] || LucideIcons[FALLBACK_ICON];
+}
+
+// Turn a hex color into an rgba() string so we can build a soft tinted background
+// behind whatever color the admin picked, without needing Tailwind to know about it
+// ahead of time (dynamic Tailwind class names don't work at build time).
+function hexToRgba(hex, alpha = 1) {
+  if (!hex) return `rgba(34, 211, 238, ${alpha})`;
+  let c = hex.replace("#", "");
+  if (c.length === 3) c = c.split("").map((x) => x + x).join("");
+  if (!/^[0-9a-fA-F]{6}$/.test(c)) return `rgba(34, 211, 238, ${alpha})`;
+  const num = parseInt(c, 16);
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function slugify(name) {
+  return (
+    name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "") || "service"
+  );
+}
+
 export default function ServicesPage({ isDarkMode = true }) {
-  const [services, setServices] = useState(INITIAL_SERVICES);
-  const [filter, setFilter] = useState("All Services");
+  const [services, setServices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("All");
+
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState(null);
+  const [editingId, setEditingId] = useState(null); // serviceID being edited, or null when adding
   const [form, setForm] = useState(emptyServiceForm);
 
-  const serviceCounts = useMemo(() => {
-    return services.reduce(
-      (acc, service) => {
-        acc.total += 1;
-        acc[service.status] = (acc[service.status] || 0) + 1;
-        return acc;
-      },
-      { total: 0, Active: 0, Maintenance: 0, Disabled: 0, Legacy: 0 }
-    );
+  // ---- Load services from the API on mount ----
+  const fetchServices = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await axiosInstance.get("/services");
+      setServices(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      // Backend returns a 400 with "No Services Found" when the collection is empty —
+      // treat that as an empty list rather than a real error.
+      if (err.response?.status === 400) {
+        setServices([]);
+      } else {
+        setError("Couldn't load services. Please refresh and try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchServices();
+  }, []);
+
+  const categories = useMemo(() => {
+    const heads = new Set(services.map((s) => s.serviceHead).filter(Boolean));
+    return ["All", ...Array.from(heads)];
+  }, [services]);
+
+  const stats = useMemo(() => {
+    const uniqueCategories = new Set(services.map((s) => s.serviceHead).filter(Boolean));
+    const uniqueTechStacks = new Set(services.flatMap((s) => s.serviceTechStacks || []));
+    return {
+      total: services.length,
+      categories: uniqueCategories.size,
+      techStacks: uniqueTechStacks.size,
+    };
   }, [services]);
 
   const filteredServices = useMemo(() => {
-    if (filter === "All Services") return services;
-    return services.filter((s) => s.status === filter);
-  }, [filter, services]);
+    return services.filter((s) => {
+      const matchesCategory = categoryFilter === "All" || s.serviceHead === categoryFilter;
+      const q = search.trim().toLowerCase();
+      const matchesSearch =
+        !q ||
+        s.serviceName?.toLowerCase().includes(q) ||
+        s.serviceDescription?.toLowerCase().includes(q) ||
+        (s.serviceTechStacks || []).some((t) => t.toLowerCase().includes(q));
+      return matchesCategory && matchesSearch;
+    });
+  }, [services, categoryFilter, search]);
 
+  // ---- Modal helpers ----
   const openCreateModal = () => {
     setEditingId(null);
     setForm(emptyServiceForm);
@@ -115,20 +141,20 @@ export default function ServicesPage({ isDarkMode = true }) {
   };
 
   const openEditModal = (service) => {
-    setEditingId(service.id);
+    setEditingId(service.serviceID);
     setForm({
-      name: service.name,
-      category: service.category,
-      description: service.description,
-      features: service.features.join(", "),
-      price: service.price,
-      priceNote: service.priceNote,
-      status: service.status,
+      serviceName: service.serviceName || "",
+      serviceHead: service.serviceHead || "",
+      serviceDescription: service.serviceDescription || "",
+      serviceIcon: service.serviceIcon || FALLBACK_ICON,
+      serviceColor: service.serviceColor || FALLBACK_COLOR,
+      serviceTechStacks: (service.serviceTechStacks || []).join(", "),
     });
     setModalOpen(true);
   };
 
   const closeModal = () => {
+    if (isSaving) return;
     setModalOpen(false);
     setEditingId(null);
     setForm(emptyServiceForm);
@@ -137,43 +163,63 @@ export default function ServicesPage({ isDarkMode = true }) {
   const handleChange = (key) => (e) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
 
-  const handleSave = () => {
-    if (editingId) {
-      setServices((prev) =>
-        prev.map((s) =>
-          s.id === editingId
-            ? {
-                ...s,
-                ...form,
-                features: form.features
-                  .split(",")
-                  .map((f) => f.trim())
-                  .filter(Boolean),
-              }
-            : s
-        )
-      );
-    } else {
-      const newService = {
-        ...form,
-        id: Date.now(),
-        icon: Server,
-        iconBg: "bg-cyan-500/15 text-cyan-300",
-        features: form.features
-          .split(",")
-          .map((f) => f.trim())
-          .filter(Boolean),
-      };
-      setServices((prev) => [newService, ...prev]);
+  // ---- Save (create or update) ----
+  const handleSave = async () => {
+    if (!form.serviceName.trim() || !form.serviceDescription.trim()) {
+      setError("Service name and description are required.");
+      return;
     }
-    closeModal();
+
+    const payload = {
+      serviceName: form.serviceName.trim(),
+      serviceHead: form.serviceHead.trim(),
+      serviceDescription: form.serviceDescription.trim(),
+      serviceIcon: (form.serviceIcon || FALLBACK_ICON).trim(),
+      serviceColor: (form.serviceColor || FALLBACK_COLOR).trim(),
+      serviceTechStacks: form.serviceTechStacks
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean),
+    };
+
+    setIsSaving(true);
+    setError(null);
+    try {
+      if (editingId) {
+        const res = await axiosInstance.put(`/services/${editingId}`, payload);
+        setServices((prev) =>
+          prev.map((s) => (s.serviceID === editingId ? res.data : s))
+        );
+      } else {
+        const serviceID = `${slugify(form.serviceName)}-${Date.now().toString(36)}`;
+        const res = await axiosInstance.post("/services", { ...payload, serviceID });
+        setServices((prev) => [res.data, ...prev]);
+      }
+      closeModal();
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          err.response?.data?.error ||
+          "Failed to save the service. Please try again."
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleDelete = (id) => {
-    if (confirm("Are you sure you want to delete this service?")) {
-      setServices((prev) => prev.filter((s) => s.id !== id));
+  // ---- Delete ----
+  const handleDelete = async (serviceID) => {
+    if (!confirm("Are you sure you want to delete this service?")) return;
+    setError(null);
+    try {
+      await axiosInstance.delete(`/services/${serviceID}`);
+      setServices((prev) => prev.filter((s) => s.serviceID !== serviceID));
+    } catch (err) {
+      setError("Failed to delete the service. Please try again.");
     }
   };
+
+  const PreviewIcon = getIconComponent(form.serviceIcon);
 
   return (
     <div className="space-y-6">
@@ -184,7 +230,7 @@ export default function ServicesPage({ isDarkMode = true }) {
             Services Management
           </h3>
           <p className="text-xs md:text-sm text-gray-500 mt-1">
-            Configure and deploy technical service packages for Evo Codes clients. Monitor status, pricing tiers, and key feature deliverables.
+            Configure the service catalogue shown on the public site — name, description, tech stack, icon, and color.
           </p>
         </div>
         <button
@@ -195,147 +241,152 @@ export default function ServicesPage({ isDarkMode = true }) {
         </button>
       </div>
 
-      {/* Dynamic Summary Stats Bar */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* Error banner */}
+      {error && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-300">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={14} />
+            <span>{error}</span>
+          </div>
+          <button onClick={() => setError(null)} aria-label="Dismiss error">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* Summary Stats Bar */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className={`p-4 rounded-xl border ${isDarkMode ? "bg-[#0f1422] border-[#1e2640]" : "bg-white border-gray-200"}`}>
           <div className="flex items-center justify-between text-gray-400">
             <span className="text-xs font-medium uppercase tracking-wider">Total Services</span>
             <Layers size={16} className="text-cyan-400" />
           </div>
-          <p className={`text-2xl font-bold mt-2 ${isDarkMode ? "text-white" : "text-gray-900"}`}>{serviceCounts.total}</p>
+          <p className={`text-2xl font-bold mt-2 ${isDarkMode ? "text-white" : "text-gray-900"}`}>{stats.total}</p>
         </div>
 
         <div className={`p-4 rounded-xl border ${isDarkMode ? "bg-[#0f1422] border-[#1e2640]" : "bg-white border-gray-200"}`}>
           <div className="flex items-center justify-between text-gray-400">
-            <span className="text-xs font-medium uppercase tracking-wider">Active</span>
-            <Server size={16} className="text-emerald-400" />
+            <span className="text-xs font-medium uppercase tracking-wider">Service Heads</span>
+            <Tags size={16} className="text-amber-400" />
           </div>
-          <p className="text-2xl font-bold mt-2 text-emerald-400">{serviceCounts.Active}</p>
+          <p className="text-2xl font-bold mt-2 text-amber-400">{stats.categories}</p>
         </div>
 
         <div className={`p-4 rounded-xl border ${isDarkMode ? "bg-[#0f1422] border-[#1e2640]" : "bg-white border-gray-200"}`}>
           <div className="flex items-center justify-between text-gray-400">
-            <span className="text-xs font-medium uppercase tracking-wider">Maintenance</span>
-            <BarChart3 size={16} className="text-amber-400" />
+            <span className="text-xs font-medium uppercase tracking-wider">Tech Stacks in Use</span>
+            <Boxes size={16} className="text-emerald-400" />
           </div>
-          <p className="text-2xl font-bold mt-2 text-amber-400">{serviceCounts.Maintenance}</p>
-        </div>
-
-        <div className={`p-4 rounded-xl border ${isDarkMode ? "bg-[#0f1422] border-[#1e2640]" : "bg-white border-gray-200"}`}>
-          <div className="flex items-center justify-between text-gray-400">
-            <span className="text-xs font-medium uppercase tracking-wider">Disabled</span>
-            <ShieldCheck size={16} className="text-rose-400" />
-          </div>
-          <p className="text-2xl font-bold mt-2 text-rose-400">{serviceCounts.Disabled}</p>
+          <p className="text-2xl font-bold mt-2 text-emerald-400">{stats.techStacks}</p>
         </div>
       </div>
 
       {/* Filters Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
-        <div className={`flex items-center gap-1 p-1 rounded-xl border ${isDarkMode ? "bg-[#0f1422] border-[#1e2640]" : "bg-white border-gray-200"}`}>
-          {FILTERS.map((f) => {
-            const count = f === "All Services" ? serviceCounts.total : serviceCounts[f] || 0;
-            return (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 ${
-                  filter === f
-                    ? "bg-cyan-500/10 text-cyan-400 font-bold"
-                    : "text-gray-400 hover:text-gray-200"
-                }`}
-              >
-                <span>{f}</span>
-                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-cyan-500/10">
-                  {count}
-                </span>
-              </button>
-            );
-          })}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+        <div className={`flex items-center gap-1 p-1 rounded-xl border overflow-x-auto max-w-full ${isDarkMode ? "bg-[#0f1422] border-[#1e2640]" : "bg-white border-gray-200"}`}>
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setCategoryFilter(cat)}
+              className={`px-3 py-1.5 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                categoryFilter === cat
+                  ? "bg-cyan-500/10 text-cyan-400 font-bold"
+                  : "text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
         </div>
-        <div className="flex items-center gap-4 text-gray-500">
-          <span>Sort by: Newest</span>
-          <span>Showing 1-{filteredServices.length} of {services.length} services</span>
-        </div>
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search services or tech stacks..."
+          className={`w-full sm:w-64 px-3 py-2 rounded-lg border bg-transparent ${isDarkMode ? "border-[#1e2640] text-white placeholder:text-gray-600" : "border-gray-300 text-gray-900 placeholder:text-gray-400"}`}
+        />
       </div>
 
       {/* Table Section */}
       <div className={`rounded-xl border overflow-hidden transition-colors w-full ${isDarkMode ? "bg-[#0f1422] border-[#1e2640]" : "bg-white border-gray-200"}`}>
-        <div className="overflow-x-auto w-full">
-          <table className="w-full text-left text-sm border-collapse min-w-[800px]">
-            <thead>
-              <tr className={`border-b text-[10px] uppercase font-bold tracking-wider text-gray-500 ${isDarkMode ? "bg-[#131a2e] border-[#1e2640]" : "bg-gray-50 border-gray-200"}`}>
-                <th className="px-6 py-3.5">Icon</th>
-                <th className="px-6 py-3.5">Service Name</th>
-                <th className="px-6 py-3.5">Description</th>
-                <th className="px-6 py-3.5">Features</th>
-                <th className="px-6 py-3.5">Pricing</th>
-                <th className="px-6 py-3.5">Status</th>
-                <th className="px-6 py-3.5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className={`divide-y text-sm ${isDarkMode ? "divide-[#1e2640]/50" : "divide-gray-200"}`}>
-              {filteredServices.map((service) => {
-                const Icon = service.icon || Server;
-                return (
-                  <tr key={service.id} className={`transition-colors ${isDarkMode ? "hover:bg-[#141b2d]" : "hover:bg-gray-50"}`}>
-                    <td className="px-6 py-4">
-                      <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${service.iconBg || "bg-cyan-500/15 text-cyan-300"}`}>
-                        <Icon size={18} />
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className={`font-semibold ${isDarkMode ? "text-white" : "text-gray-900"}`}>{service.name}</p>
-                      <p className="text-[10px] uppercase tracking-wide text-gray-500">{service.category}</p>
-                    </td>
-                    <td className="max-w-xs px-6 py-4 text-xs text-gray-400">
-                      {service.description}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-wrap gap-1.5">
-                        {service.features.map((feat) => (
-                          <span
-                            key={feat}
-                            className={`rounded px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide border ${
-                              isDarkMode ? "bg-[#151c30] border-[#222f54] text-gray-300" : "bg-gray-100 border-gray-200 text-gray-700"
-                            }`}
-                          >
-                            {feat}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="font-semibold text-cyan-400 text-xs">{service.price}</p>
-                      <p className="text-[10px] text-gray-500">{service.priceNote}</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${STATUS_STYLES[service.status]}`}>
-                        <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                        {service.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-3 text-gray-400">
-                        <button onClick={() => openEditModal(service)} className="hover:text-cyan-400 transition-colors" aria-label="Edit service">
-                          <Pencil size={15} />
-                        </button>
-                        <button onClick={() => handleDelete(service.id)} className="hover:text-rose-400 transition-colors" aria-label="Delete service">
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-gray-500 text-sm">
+            <Loader2 size={18} className="animate-spin" /> Loading services...
+          </div>
+        ) : filteredServices.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-16 text-gray-500 text-sm">
+            <Boxes size={24} className="opacity-50" />
+            <p>No services found.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto w-full">
+            <table className="w-full text-left text-sm border-collapse min-w-[800px]">
+              <thead>
+                <tr className={`border-b text-[10px] uppercase font-bold tracking-wider text-gray-500 ${isDarkMode ? "bg-[#131a2e] border-[#1e2640]" : "bg-gray-50 border-gray-200"}`}>
+                  <th className="px-6 py-3.5">Icon</th>
+                  <th className="px-6 py-3.5">Service Name</th>
+                  <th className="px-6 py-3.5">Description</th>
+                  <th className="px-6 py-3.5">Tech Stacks</th>
+                  <th className="px-6 py-3.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className={`divide-y text-sm ${isDarkMode ? "divide-[#1e2640]/50" : "divide-gray-200"}`}>
+                {filteredServices.map((service) => {
+                  const Icon = getIconComponent(service.serviceIcon);
+                  const color = service.serviceColor || FALLBACK_COLOR;
+                  return (
+                    <tr key={service.serviceID} className={`transition-colors ${isDarkMode ? "hover:bg-[#141b2d]" : "hover:bg-gray-50"}`}>
+                      <td className="px-6 py-4">
+                        <div
+                          className="flex h-9 w-9 items-center justify-center rounded-lg"
+                          style={{ backgroundColor: hexToRgba(color, 0.15), color }}
+                        >
+                          <Icon size={18} />
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <p className={`font-semibold ${isDarkMode ? "text-white" : "text-gray-900"}`}>{service.serviceName}</p>
+                        <p className="text-[10px] uppercase tracking-wide text-gray-500">{service.serviceHead}</p>
+                      </td>
+                      <td className="max-w-xs px-6 py-4 text-xs text-gray-400">
+                        {service.serviceDescription}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-wrap gap-1.5">
+                          {(service.serviceTechStacks || []).map((tech) => (
+                            <span
+                              key={tech}
+                              className={`rounded px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide border ${
+                                isDarkMode ? "bg-[#151c30] border-[#222f54] text-gray-300" : "bg-gray-100 border-gray-200 text-gray-700"
+                              }`}
+                            >
+                              {tech}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-end gap-3 text-gray-400">
+                          <button onClick={() => openEditModal(service)} className="hover:text-cyan-400 transition-colors" aria-label="Edit service">
+                            <Pencil size={15} />
+                          </button>
+                          <button onClick={() => handleDelete(service.serviceID)} className="hover:text-rose-400 transition-colors" aria-label="Delete service">
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-        {/* Table Footer - Standardized Layout (Left: Info, Right: Controls) */}
+        {/* Table Footer */}
         <div className={`p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs border-t ${isDarkMode ? "bg-[#131a2e]/60 border-[#1e2640] text-gray-400" : "bg-gray-50 border-gray-200 text-gray-600"}`}>
           <p>
-            Showing <span className={`font-semibold ${isDarkMode ? "text-gray-200" : "text-gray-900"}`}>1–{filteredServices.length}</span> of{" "}
+            Showing <span className={`font-semibold ${isDarkMode ? "text-gray-200" : "text-gray-900"}`}>{filteredServices.length}</span> of{" "}
             <span className={`font-semibold ${isDarkMode ? "text-gray-200" : "text-gray-900"}`}>{services.length}</span> services
           </p>
           <div className="flex items-center gap-1.5">
@@ -353,94 +404,119 @@ export default function ServicesPage({ isDarkMode = true }) {
       {/* Service Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className={`w-full max-w-lg rounded-xl border p-6 space-y-4 shadow-2xl ${isDarkMode ? "bg-[#0f1422] border-[#1e2640] text-gray-200" : "bg-white border-gray-200 text-gray-800"}`}>
+          <div className={`w-full max-w-lg rounded-xl border p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto ${isDarkMode ? "bg-[#0f1422] border-[#1e2640] text-gray-200" : "bg-white border-gray-200 text-gray-800"}`}>
             <h4 className="text-lg font-bold">{editingId ? "Edit Service" : "Add Service"}</h4>
-            
+
             <div className="grid grid-cols-2 gap-4 text-xs">
               <div className="space-y-1">
                 <label className="text-gray-400 font-medium">Service Name</label>
                 <input
                   type="text"
-                  value={form.name}
-                  onChange={handleChange("name")}
+                  value={form.serviceName}
+                  onChange={handleChange("serviceName")}
                   className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${isDarkMode ? "border-[#1e2640] text-white" : "border-gray-300 text-gray-900"}`}
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-gray-400 font-medium">Category</label>
+                <label className="text-gray-400 font-medium">Service Head</label>
                 <input
                   type="text"
-                  value={form.category}
-                  onChange={handleChange("category")}
+                  value={form.serviceHead}
+                  onChange={handleChange("serviceHead")}
                   placeholder="e.g. Backend / Core"
                   className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${isDarkMode ? "border-[#1e2640] text-white" : "border-gray-300 text-gray-900"}`}
                 />
               </div>
+
               <div className="col-span-2 space-y-1">
                 <label className="text-gray-400 font-medium">Description</label>
                 <textarea
-                  value={form.description}
-                  onChange={handleChange("description")}
+                  value={form.serviceDescription}
+                  onChange={handleChange("serviceDescription")}
                   rows={3}
                   className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${isDarkMode ? "border-[#1e2640] text-white" : "border-gray-300 text-gray-900"}`}
                 />
               </div>
+
               <div className="col-span-2 space-y-1">
-                <label className="text-gray-400 font-medium">Features (comma separated)</label>
+                <label className="text-gray-400 font-medium">Tech Stacks (comma separated)</label>
                 <input
                   type="text"
-                  value={form.features}
-                  onChange={handleChange("features")}
+                  value={form.serviceTechStacks}
+                  onChange={handleChange("serviceTechStacks")}
                   placeholder="GraphQL, Redis, OAuth2"
                   className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${isDarkMode ? "border-[#1e2640] text-white" : "border-gray-300 text-gray-900"}`}
                 />
               </div>
+
+              {/* Icon picker: free-text lucide icon name + suggestions + live preview */}
               <div className="space-y-1">
-                <label className="text-gray-400 font-medium">Price</label>
+                <label className="text-gray-400 font-medium">Icon (lucide-react name)</label>
                 <input
+                  list="icon-suggestions"
                   type="text"
-                  value={form.price}
-                  onChange={handleChange("price")}
-                  placeholder="$4,500"
+                  value={form.serviceIcon}
+                  onChange={handleChange("serviceIcon")}
+                  placeholder="e.g. Cloud"
                   className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${isDarkMode ? "border-[#1e2640] text-white" : "border-gray-300 text-gray-900"}`}
                 />
-              </div>
-              <div className="space-y-1">
-                <label className="text-gray-400 font-medium">Price Note</label>
-                <input
-                  type="text"
-                  value={form.priceNote}
-                  onChange={handleChange("priceNote")}
-                  placeholder="Starting from"
-                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${isDarkMode ? "border-[#1e2640] text-white" : "border-gray-300 text-gray-900"}`}
-                />
-              </div>
-              <div className="col-span-2 space-y-1">
-                <label className="text-gray-400 font-medium">Status</label>
-                <select
-                  value={form.status}
-                  onChange={handleChange("status")}
-                  className={`w-full p-2.5 rounded-lg border focus:ring-0 ${isDarkMode ? "bg-[#0f1422] border-[#1e2640] text-white" : "bg-white border-gray-300 text-gray-900"}`}
-                >
-                  {STATUS_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
+                <datalist id="icon-suggestions">
+                  {ICON_SUGGESTIONS.map((name) => (
+                    <option key={name} value={name} />
                   ))}
-                </select>
+                </datalist>
+                <p className="text-[10px] text-gray-500">
+                  Any exact <a href="https://lucide.dev/icons" target="_blank" rel="noreferrer" className="underline">lucide.dev/icons</a> name works, e.g. "Server", "Cloud".
+                </p>
+              </div>
+
+              {/* Color picker */}
+              <div className="space-y-1">
+                <label className="text-gray-400 font-medium">Color</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={/^#[0-9a-fA-F]{6}$/.test(form.serviceColor) ? form.serviceColor : FALLBACK_COLOR}
+                    onChange={handleChange("serviceColor")}
+                    className="h-9 w-10 rounded border border-[#1e2640] bg-transparent cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={form.serviceColor}
+                    onChange={handleChange("serviceColor")}
+                    placeholder="#22d3ee"
+                    className={`flex-1 p-2.5 rounded-lg border bg-transparent focus:ring-0 ${isDarkMode ? "border-[#1e2640] text-white" : "border-gray-300 text-gray-900"}`}
+                  />
+                </div>
+              </div>
+
+              {/* Live preview of icon + color combo */}
+              <div className="col-span-2 flex items-center gap-3 rounded-lg border border-dashed border-[#1e2640] p-3">
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-lg"
+                  style={{ backgroundColor: hexToRgba(form.serviceColor, 0.15), color: form.serviceColor || FALLBACK_COLOR }}
+                >
+                  <PreviewIcon size={20} />
+                </div>
+                <span className="text-[11px] text-gray-500">Preview — how this will appear on the site</span>
               </div>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 onClick={closeModal}
-                className="px-4 py-2 rounded-lg border border-gray-700 text-xs font-medium hover:bg-gray-800"
+                disabled={isSaving}
+                className="px-4 py-2 rounded-lg border border-gray-700 text-xs font-medium hover:bg-gray-800 disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
-                className="px-4 py-2 rounded-lg bg-cyan-400 text-[#0b0f17] text-xs font-bold hover:bg-cyan-300"
+                disabled={isSaving}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-400 text-[#0b0f17] text-xs font-bold hover:bg-cyan-300 disabled:opacity-50"
               >
-                Save Changes
+                {isSaving && <Loader2 size={14} className="animate-spin" />}
+                {editingId ? "Save Changes" : "Add Service"}
               </button>
             </div>
           </div>
