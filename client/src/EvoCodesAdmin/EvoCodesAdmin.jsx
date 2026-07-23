@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Download, Plus, Globe, Menu, LogIn, UserPlus, X, User, Mail, Phone, Lock, Calendar, Building, CheckCircle } from 'lucide-react';
+import axiosInstance from './api/axiosInstance';
 
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
@@ -44,10 +45,8 @@ export default function EvoCodesAdmin() {
   // ------------------ AUTH STATE & LOGIC ------------------
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState('signin'); // 'signin' | 'signup' | 'forgot'
-  const [currentUser, setCurrentUser] = useState(() => {
-    const savedUser = localStorage.getItem('evocodes_current_user');
-    return savedUser ? JSON.parse(savedUser) : null;
-  });
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true); // true while checking for an existing session on load
 
   // Generated ID popup state
   const [createdUserPopup, setCreatedUserPopup] = useState(null);
@@ -67,54 +66,59 @@ export default function EvoCodesAdmin() {
   const [newPassword, setNewPassword] = useState('');
   const [isOtpVerified, setIsOtpVerified] = useState(false);
 
-  // Handle Sign Up & ID Generation (ECA01, ECA02...)
-  const handleSignUpSubmit = (e) => {
+  // Handle Sign Up — calls the backend, which generates the ECA ID and
+  // sets an httpOnly session cookie in its response.
+  const handleSignUpSubmit = async (e) => {
     e.preventDefault();
     if (signUpData.password !== signUpData.confirmPassword) {
       alert("Passwords do not match!");
       return;
     }
 
-    const registeredUsers = JSON.parse(localStorage.getItem('evocodes_users') || '[]');
-    const nextOrder = registeredUsers.length + 1;
-    const formattedNumber = String(nextOrder).padStart(2, '0');
-    const generatedEcaId = `ECA${formattedNumber}`;
+    try {
+      const res = await axiosInstance.post("/register", {
+        email: signUpData.email,
+        username: signUpData.username,
+        phoneNumber: signUpData.phone,
+        password: signUpData.password,
+        reEnterPassword: signUpData.confirmPassword,
+        dateOfBirth: signUpData.dob,
+        companyCode: signUpData.companyCode,
+        role: "Developer", // no role field in this form yet — defaulting for now
+      });
 
-    const newUser = {
-      ...signUpData,
-      id: generatedEcaId,
-      registeredAt: new Date().toISOString()
-    };
+      const data = res.data;
 
-    const updatedUsers = [...registeredUsers, newUser];
-    localStorage.setItem('evocodes_users', JSON.stringify(updatedUsers));
-
-    // Show persistent custom popup modal with generated ID
-    setCreatedUserPopup(newUser);
-    setIsAuthModalOpen(false);
-    setSignUpData({ email: '', username: '', phone: '', password: '', confirmPassword: '', dob: '', companyCode: '' });
+      // Show persistent custom popup modal with the backend-generated ECA ID
+      setCreatedUserPopup(data.admin);
+      setCurrentUser(data.admin); // already logged in — the cookie was set by /register
+      setIsAuthModalOpen(false);
+      setSignUpData({ email: '', username: '', phone: '', password: '', confirmPassword: '', dob: '', companyCode: '' });
+    } catch (err) {
+      console.error("Register error:", err);
+      const message = err.response?.data?.message || "Couldn't reach the server. Please check your connection and try again.";
+      alert(message);
+    }
   };
 
-  // Handle Sign In Verification
-  const handleSignInSubmit = (e) => {
+  // Handle Sign In — backend verifies credentials and sets the httpOnly cookie
+  const handleSignInSubmit = async (e) => {
     e.preventDefault();
-    const registeredUsers = JSON.parse(localStorage.getItem('evocodes_users') || '[]');
-    const matchedUser = registeredUsers.find(
-      u => (u.email.toLowerCase() === signInData.userIdOrMail.toLowerCase() || u.id.toLowerCase() === signInData.userIdOrMail.toLowerCase()) && u.password === signInData.password
-    );
+    try {
+      const res = await axiosInstance.post("/login", {
+        identifier: signInData.userIdOrMail,
+        password: signInData.password,
+      });
 
-    if (matchedUser) {
-      setCurrentUser(matchedUser);
-      localStorage.setItem('evocodes_current_user', JSON.stringify(matchedUser));
+      const data = res.data;
+
+      setCurrentUser(data.admin);
       setIsAuthModalOpen(false);
       setSignInData({ userIdOrMail: '', password: '' });
-    } else if (signInData.userIdOrMail === 'admin' && signInData.password === 'admin') {
-      const adminUser = { id: 'ECA00', username: 'Super Admin', email: 'admin@evocodes.com' };
-      setCurrentUser(adminUser);
-      localStorage.setItem('evocodes_current_user', JSON.stringify(adminUser));
-      setIsAuthModalOpen(false);
-    } else {
-      alert("Invalid Mail ID / User ID or Password.");
+    } catch (err) {
+      console.error("Login error:", err);
+      const message = err.response?.data?.message || "Couldn't reach the server. Please check your connection and try again.";
+      alert(message);
     }
   };
 
@@ -154,12 +158,33 @@ export default function EvoCodesAdmin() {
     setNewPassword('');
   };
 
-  const handleLogout = () => {
-    if (confirm("Confirm logging out of your session?")) {
-      setCurrentUser(null);
-      localStorage.removeItem('evocodes_current_user');
+  const handleLogout = async () => {
+    if (!confirm("Confirm logging out of your session?")) return;
+    try {
+      await axiosInstance.post("/logout");
+    } catch (err) {
+      console.error("Logout error:", err);
+      // Clear local state regardless — worst case the cookie expires on its own in 7 days
     }
+    setCurrentUser(null);
   };
+
+  // On mount, ask the backend if there's a valid session cookie already.
+  // This is how the session survives a page refresh, since httpOnly cookies
+  // can't be read directly from JS.
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const res = await axiosInstance.get("/me");
+        setCurrentUser(res.data.admin);
+      } catch (err) {
+        // 401 here just means "not logged in yet" — not an error worth surfacing
+      } finally {
+        setIsAuthLoading(false);
+      }
+    };
+    restoreSession();
+  }, []);
 
   // --------------------------------------------------------
 
@@ -652,7 +677,7 @@ export default function EvoCodesAdmin() {
             <div className="bg-[#0b0f17] border border-[#1e2640] p-4 rounded-xl mb-5 space-y-2">
               <span className="text-xs text-gray-400 block uppercase tracking-wider">Your Assigned Unique ID</span>
               <span className="text-3xl font-extrabold text-[#72efdd] tracking-widest block font-mono">
-                {createdUserPopup.id}
+                {createdUserPopup.userID}
               </span>
               <span className="text-[11px] text-gray-500 block">Company Code: {createdUserPopup.companyCode}</span>
             </div>
@@ -663,7 +688,7 @@ export default function EvoCodesAdmin() {
 
             <button
               onClick={() => {
-                setSignInData({ userIdOrMail: createdUserPopup.id, password: '' });
+                setSignInData({ userIdOrMail: createdUserPopup.userID, password: '' });
                 setCreatedUserPopup(null);
                 setAuthMode('signin');
                 setIsAuthModalOpen(true);
