@@ -21,13 +21,12 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
+import axiosInstance from "./api/axiosInstance";
 
 // -----------------------------------------------------------------------
 // Dashboard
-// Top-level overview pulling counts + recent activity from every entity:
-// employees, clients, services, projects, blogs, testimonials, contact
-// requests. Wire the fetch calls in loadDashboardData() to your real API
-// (e.g. GET /employees, GET /clients, GET /services, ...).
+// Top-level overview pulling counts from /dashboard/stats and department
+// distribution from /dashboard/departments.
 // -----------------------------------------------------------------------
 
 const STATUS_COLORS = {
@@ -62,20 +61,6 @@ const StatCard = ({ icon: Icon, label, value, trend, accent }) => (
   </div>
 );
 
-const ActivityItem = ({ dot, title, subtitle, time }) => (
-  <div className="flex items-start gap-3 py-3 border-b border-[var(--border-subtle)] last:border-0">
-    <span
-      className="mt-1.5 w-2 h-2 rounded-full shrink-0"
-      style={{ backgroundColor: dot }}
-    />
-    <div className="flex-1 min-w-0">
-      <p className="text-sm text-gray-200 truncate">{title}</p>
-      <p className="text-xs text-gray-500">{subtitle}</p>
-    </div>
-    <span className="text-xs text-gray-500 whitespace-nowrap">{time}</span>
-  </div>
-);
-
 const QuickAction = ({ icon: Icon, label, onClick }) => (
   <button
     onClick={onClick}
@@ -86,7 +71,7 @@ const QuickAction = ({ icon: Icon, label, onClick }) => (
   </button>
 );
 
-export default function Dashboard() {
+export default function Dashboard({ onNavigate }) {
   const [stats, setStats] = useState({
     employees: 0,
     clients: 0,
@@ -97,7 +82,6 @@ export default function Dashboard() {
     contactRequests: 0,
   });
   const [departmentData, setDepartmentData] = useState([]);
-  const [activity, setActivity] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -108,62 +92,47 @@ export default function Dashboard() {
     try {
       setLoading(true);
 
-      // Replace with real endpoints, e.g.:
-      // const [employeesRes, clientsRes, servicesRes, blogsRes, contactRes] =
-      //   await Promise.all([
-      //     fetch("/employees").then((r) => r.json()),
-      //     fetch("/clients").then((r) => r.json()),
-      //     fetch("/services").then((r) => r.json()),
-      //     fetch("/blogs").then((r) => r.json()),
-      //     fetch("/contactrequests").then((r) => r.json()),
-      //   ]);
+      // Fetch stats and department data in parallel
+      const [statsRes, deptRes] = await Promise.all([
+        axiosInstance.get("/dashboard/stats"),
+        axiosInstance.get("/dashboard/departments"),
+      ]);
 
-      // Placeholder data matching your existing screens until wired up
+      const statsData = statsRes.data;
+      const deptData = deptRes.data;
+
       setStats({
-        employees: 128,
-        clients: 124,
-        services: 4,
-        projects: 42,
-        blogs: 16,
-        testimonials: 9,
-        contactRequests: 5,
+        employees: statsData.employees ?? 0,
+        clients: statsData.clients ?? 0,
+        services: statsData.services ?? 0,
+        projects: statsData.activeProjects ?? 0,
+        blogs: statsData.blogPosts ?? 0,
+        testimonials: statsData.testimonials ?? 0,
+        contactRequests: statsData.contactRequests ?? 0,
       });
 
-      setDepartmentData([
-        { name: "Engineering", value: 64, color: "#38BDF8" },
-        { name: "Design", value: 18, color: "#34D399" },
-        { name: "Marketing", value: 24, color: "#818CF8" },
-        { name: "Operations", value: 22, color: "#FBBF24" },
-      ]);
+      // Map department data to chart format
+      const departmentColors = ["#38BDF8", "#34D399", "#818CF8", "#FBBF24", "#F472B6", "#A78BFA"];
+      const mappedDeptData = (deptData.departments || deptData || []).map((dept, i) => ({
+        name: dept.name || dept.department || "Unknown",
+        value: dept.count || dept.headcount || dept.value || 0,
+        color: departmentColors[i % departmentColors.length],
+      }));
 
-      setActivity([
-        {
-          dot: "#38BDF8",
-          title: "New contact request from David Miller",
-          subtitle: "Quantum Logistics",
-          time: "2h ago",
-        },
-        {
-          dot: "#34D399",
-          title: '"Scaling GraphQL at Evo Codes" published',
-          subtitle: "Blog · Engineering",
-          time: "5h ago",
-        },
-        {
-          dot: "#818CF8",
-          title: "VitalStream added as a new client",
-          subtitle: "Health Tech",
-          time: "1d ago",
-        },
-        {
-          dot: "#FBBF24",
-          title: "Marcus Chen set to On Leave",
-          subtitle: "Operations",
-          time: "2d ago",
-        },
-      ]);
+      setDepartmentData(mappedDeptData);
     } catch (err) {
       console.error("Failed to load dashboard data:", err);
+      // Fallback to empty data on error
+      setStats({
+        employees: 0,
+        clients: 0,
+        services: 0,
+        projects: 0,
+        blogs: 0,
+        testimonials: 0,
+        contactRequests: 0,
+      });
+      setDepartmentData([]);
     } finally {
       setLoading(false);
     }
@@ -179,6 +148,16 @@ export default function Dashboard() {
     { icon: MessageSquare, label: "Contact Requests", value: stats.contactRequests, accent: "var(--accent-rose)" },
   ];
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[var(--bg-main)] p-8">
+        <div className="flex items-center justify-center h-64">
+          <div className="w-10 h-10 border-4 border-[#4cc9f0] border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[var(--bg-main)] p-8">
       {/* Header */}
@@ -193,10 +172,26 @@ export default function Dashboard() {
 
       {/* Quick actions */}
       <div className="flex flex-wrap gap-3 mb-8">
-        <QuickAction icon={UserPlus} label="Add Employee" />
-        <QuickAction icon={PlusCircle} label="Add Service" />
-        <QuickAction icon={Building2} label="Add Client" />
-        <QuickAction icon={BookOpen} label="New Blog Post" />
+        <QuickAction 
+          icon={UserPlus} 
+          label="Add Employee" 
+          onClick={() => onNavigate && onNavigate('Employees')}
+        />
+        <QuickAction 
+          icon={PlusCircle} 
+          label="Add Service" 
+          onClick={() => onNavigate && onNavigate('Services')}
+        />
+        <QuickAction 
+          icon={Building2} 
+          label="Add Client" 
+          onClick={() => onNavigate && onNavigate('Clients')}
+        />
+        <QuickAction 
+          icon={BookOpen} 
+          label="New Blog Post" 
+          onClick={() => onNavigate && onNavigate('Blogs')}
+        />
       </div>
 
       {/* Stat cards */}
@@ -206,58 +201,48 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* Chart + activity feed */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Department distribution */}
-        <div className="lg:col-span-2 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6">
+      {/* Department distribution chart */}
+      <div className="grid grid-cols-1 gap-6">
+        <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6">
           <h2 className="text-sm font-semibold text-gray-200 mb-1">
             Department Distribution
           </h2>
           <p className="text-xs text-gray-500 mb-4">
             Headcount across all departments
           </p>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={departmentData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
-              <XAxis
-                dataKey="name"
-                stroke="#6B7280"
-                fontSize={12}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis stroke="#6B7280" fontSize={12} tickLine={false} axisLine={false} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "var(--bg-card)",
-                  border: "1px solid var(--border-subtle)",
-                  borderRadius: 8,
-                  color: "#fff",
-                }}
-                cursor={{ fill: "var(--border-subtle)" }}
-              />
-              <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                {departmentData.map((entry, i) => (
-                  <Cell key={i} fill={entry.color} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Recent activity */}
-        <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6">
-          <h2 className="text-sm font-semibold text-gray-200 mb-1">
-            Recent Activity
-          </h2>
-          <p className="text-xs text-gray-500 mb-2">
-            Latest updates across the console
-          </p>
-          <div>
-            {activity.map((item, i) => (
-              <ActivityItem key={i} {...item} />
-            ))}
-          </div>
+          {departmentData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={departmentData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+                <XAxis
+                  dataKey="name"
+                  stroke="#6B7280"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis stroke="#6B7280" fontSize={12} tickLine={false} axisLine={false} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "var(--bg-card)",
+                    border: "1px solid var(--border-subtle)",
+                    borderRadius: 8,
+                    color: "#fff",
+                  }}
+                  cursor={{ fill: "var(--border-subtle)" }}
+                />
+                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                  {departmentData.map((entry, i) => (
+                    <Cell key={i} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[300px] text-gray-500 text-sm">
+              No department data available
+            </div>
+          )}
         </div>
       </div>
     </div>

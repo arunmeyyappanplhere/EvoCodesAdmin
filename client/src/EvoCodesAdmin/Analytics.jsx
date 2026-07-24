@@ -13,13 +13,15 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
+import axiosInstance from "./api/axiosInstance";
 
 // -----------------------------------------------------------------------
 // Analytics
-// Trend + distribution views built from your Clients, Services, and
-// Employees data. Wire loadAnalyticsData() to your real endpoints
-// (GET /clients, GET /services, GET /employees) and derive the shapes
-// below from the response instead of the placeholder data.
+// Trend + distribution views pulled from:
+//   GET /analytics/growth-trend      -> analyticsController.getGrowthTrend
+//   GET /analytics/services-status   -> analyticsController.getServicesByStatus
+//   GET /analytics/clients-industry  -> analyticsController.getClientsByIndustry
+//   GET /analytics/top-clients       -> analyticsController.getTopClientsByProjects
 // -----------------------------------------------------------------------
 
 const SERVICE_STATUS_COLORS = {
@@ -29,7 +31,7 @@ const SERVICE_STATUS_COLORS = {
   Legacy: "#6B7280",
 };
 
-const INDUSTRY_COLORS = ["#38BDF8", "#818CF8", "#34D399", "#FBBF24", "#F472B6"];
+const INDUSTRY_COLORS = ["#38BDF8", "#818CF8", "#34D399", "#FBBF24", "#F472B6", "#22D3EE", "#FB923C"];
 
 const RANGES = ["7D", "30D", "90D", "12M"];
 
@@ -61,59 +63,118 @@ const Legend2 = ({ items }) => (
   </div>
 );
 
+const EmptyState = ({ label }) => (
+  <div className="flex items-center justify-center h-[220px] text-gray-500 text-sm">
+    {label}
+  </div>
+);
+
 export default function Analytics() {
   const [range, setRange] = useState("30D");
   const [growthData, setGrowthData] = useState([]);
+  const [growthTrendPct, setGrowthTrendPct] = useState(null);
   const [serviceStatusData, setServiceStatusData] = useState([]);
   const [industryData, setIndustryData] = useState([]);
   const [topClients, setTopClients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     loadAnalyticsData(range);
+    // Note: the current /analytics/growth-trend endpoint always returns the
+    // last 6 months and doesn't accept a range filter yet. The range
+    // selector is wired up and will re-fetch when the backend supports a
+    // `?range=` query param — see the note in the response for how to add it.
   }, [range]);
 
   const loadAnalyticsData = async (selectedRange) => {
     try {
-      // Replace with real endpoints, e.g.:
-      // const [clientsRes, servicesRes] = await Promise.all([
-      //   fetch("/clients").then((r) => r.json()),
-      //   fetch("/services").then((r) => r.json()),
-      // ]);
-      // Then bucket clientsRes by month / industry, and servicesRes by status.
+      setLoading(true);
+      setError(null);
 
-      setGrowthData([
-        { month: "Feb", clients: 96, employees: 112 },
-        { month: "Mar", clients: 101, employees: 115 },
-        { month: "Apr", clients: 108, employees: 118 },
-        { month: "May", clients: 114, employees: 121 },
-        { month: "Jun", clients: 119, employees: 124 },
-        { month: "Jul", clients: 124, employees: 128 },
+      const [growthRes, statusRes, industryRes, topClientsRes] = await Promise.all([
+        axiosInstance.get("/analytics/growth-trend", { params: { range: selectedRange } }),
+        axiosInstance.get("/analytics/services-status"),
+        axiosInstance.get("/analytics/clients-industry"),
+        axiosInstance.get("/analytics/top-clients"),
       ]);
 
-      setServiceStatusData([
-        { name: "Active", value: 2, color: SERVICE_STATUS_COLORS.Active },
-        { name: "Maintenance", value: 1, color: SERVICE_STATUS_COLORS.Maintenance },
-        { name: "Disabled", value: 1, color: SERVICE_STATUS_COLORS.Disabled },
-      ]);
+      // --- Growth trend: { months: [...], clients: [...], employees: [...] } ---
+      const growth = growthRes.data || {};
+      const months = growth.months || [];
+      const clientsSeries = growth.clients || [];
+      const employeesSeries = growth.employees || [];
+      const mappedGrowth = months.map((month, i) => ({
+        month,
+        clients: clientsSeries[i] ?? 0,
+        employees: employeesSeries[i] ?? 0,
+      }));
+      setGrowthData(mappedGrowth);
 
-      setIndustryData([
-        { name: "Cloud Infrastructure", value: 34, color: INDUSTRY_COLORS[0] },
-        { name: "Fintech", value: 28, color: INDUSTRY_COLORS[1] },
-        { name: "Health Tech", value: 22, color: INDUSTRY_COLORS[2] },
-        { name: "Logistics", value: 18, color: INDUSTRY_COLORS[3] },
-        { name: "Other", value: 22, color: INDUSTRY_COLORS[4] },
-      ]);
+      // Derive a simple "% change this period" from first vs last clients count
+      if (mappedGrowth.length >= 2) {
+        const first = mappedGrowth[0].clients;
+        const last = mappedGrowth[mappedGrowth.length - 1].clients;
+        if (first > 0) {
+          setGrowthTrendPct(Math.round(((last - first) / first) * 100));
+        } else {
+          setGrowthTrendPct(null);
+        }
+      } else {
+        setGrowthTrendPct(null);
+      }
 
-      setTopClients([
-        { name: "VitalStream", industry: "Health Tech", projects: 7 },
-        { name: "NexGen Systems", industry: "Cloud Infrastructure", projects: 4 },
-        { name: "Vertex Finance", industry: "Fintech", projects: 2 },
-        { name: "Quantum Logistics", industry: "Logistics", projects: 1 },
-      ]);
+      // --- Services by status: [{ status, count }] ---
+      const statusList = statusRes.data || [];
+      setServiceStatusData(
+        statusList.map((item) => ({
+          name: item.status,
+          value: item.count,
+          color: SERVICE_STATUS_COLORS[item.status] || "#6B7280",
+        }))
+      );
+
+      // --- Clients by industry: [{ industry, count }] ---
+      const industryList = industryRes.data || [];
+      setIndustryData(
+        industryList.map((item, i) => ({
+          name: item.industry || "Unspecified",
+          value: item.count,
+          color: INDUSTRY_COLORS[i % INDUSTRY_COLORS.length],
+        }))
+      );
+
+      // --- Top clients: [{ company, industry, activeProjects }] ---
+      const topClientsList = topClientsRes.data || [];
+      setTopClients(
+        topClientsList.map((item) => ({
+          name: item.company,
+          industry: item.industry,
+          projects: item.activeProjects,
+        }))
+      );
     } catch (err) {
       console.error("Failed to load analytics data:", err);
+      setError("Couldn't load analytics data. Please try again.");
+      setGrowthData([]);
+      setGrowthTrendPct(null);
+      setServiceStatusData([]);
+      setIndustryData([]);
+      setTopClients([]);
+    } finally {
+      setLoading(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[var(--bg-main)] p-8">
+        <div className="flex items-center justify-center h-64">
+          <div className="w-10 h-10 border-4 border-[#4cc9f0] border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[var(--bg-main)] p-8">
@@ -142,133 +203,166 @@ export default function Analytics() {
         </div>
       </div>
 
+      {error && (
+        <div className="mb-6 text-sm text-[var(--accent-rose)] bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-lg px-4 py-3">
+          {error}
+        </div>
+      )}
+
       {/* Growth trend */}
       <Panel
         title="Growth Trend"
         subtitle="Clients and employees over time"
         right={
-          <span className="flex items-center gap-1 text-xs text-emerald-400">
-            <TrendingUp size={13} />
-            +12% this period
-          </span>
+          growthTrendPct !== null && (
+            <span
+              className={`flex items-center gap-1 text-xs ${
+                growthTrendPct >= 0 ? "text-emerald-400" : "text-[var(--accent-rose)]"
+              }`}
+            >
+              <TrendingUp size={13} />
+              {growthTrendPct >= 0 ? "+" : ""}
+              {growthTrendPct}% this period
+            </span>
+          )
         }
       >
-        <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={growthData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
-            <XAxis dataKey="month" stroke="#6B7280" fontSize={12} tickLine={false} axisLine={false} />
-            <YAxis stroke="#6B7280" fontSize={12} tickLine={false} axisLine={false} />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: "var(--bg-card)",
-                border: "1px solid var(--border-subtle)",
-                borderRadius: 8,
-                color: "#fff",
-              }}
-            />
-            <Legend wrapperStyle={{ fontSize: 12, color: "#9CA3AF" }} />
-            <Line
-              type="monotone"
-              dataKey="clients"
-              stroke="var(--accent-cyan)"
-              strokeWidth={2}
-              dot={false}
-              name="Clients"
-            />
-            <Line
-              type="monotone"
-              dataKey="employees"
-              stroke="#818CF8"
-              strokeWidth={2}
-              dot={false}
-              name="Employees"
-            />
-          </LineChart>
-        </ResponsiveContainer>
+        {growthData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={growthData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
+              <XAxis dataKey="month" stroke="#6B7280" fontSize={12} tickLine={false} axisLine={false} />
+              <YAxis stroke="#6B7280" fontSize={12} tickLine={false} axisLine={false} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "var(--bg-card)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: 8,
+                  color: "#fff",
+                }}
+              />
+              <Legend wrapperStyle={{ fontSize: 12, color: "#9CA3AF" }} />
+              <Line
+                type="monotone"
+                dataKey="clients"
+                stroke="var(--accent-cyan)"
+                strokeWidth={2}
+                dot={false}
+                name="Clients"
+              />
+              <Line
+                type="monotone"
+                dataKey="employees"
+                stroke="#818CF8"
+                strokeWidth={2}
+                dot={false}
+                name="Employees"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        ) : (
+          <EmptyState label="No growth data available" />
+        )}
       </Panel>
 
       {/* Distribution charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
         <Panel title="Services by Status" subtitle="Current state of all service packages">
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie
-                data={serviceStatusData}
-                dataKey="value"
-                nameKey="name"
-                innerRadius={55}
-                outerRadius={85}
-                paddingAngle={3}
-              >
-                {serviceStatusData.map((entry, i) => (
-                  <Cell key={i} fill={entry.color} stroke="none" />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "var(--bg-card)",
-                  border: "1px solid var(--border-subtle)",
-                  borderRadius: 8,
-                  color: "#fff",
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-          <Legend2 items={serviceStatusData.map((d) => ({ label: d.name, value: d.value, color: d.color }))} />
+          {serviceStatusData.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={serviceStatusData}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={55}
+                    outerRadius={85}
+                    paddingAngle={3}
+                  >
+                    {serviceStatusData.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} stroke="none" />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "var(--bg-card)",
+                      border: "1px solid var(--border-subtle)",
+                      borderRadius: 8,
+                      color: "#fff",
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <Legend2 items={serviceStatusData.map((d) => ({ label: d.name, value: d.value, color: d.color }))} />
+            </>
+          ) : (
+            <EmptyState label="No service status data available" />
+          )}
         </Panel>
 
         <Panel title="Clients by Industry" subtitle="Distribution across sectors served">
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie
-                data={industryData}
-                dataKey="value"
-                nameKey="name"
-                innerRadius={55}
-                outerRadius={85}
-                paddingAngle={3}
-              >
-                {industryData.map((entry, i) => (
-                  <Cell key={i} fill={entry.color} stroke="none" />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "var(--bg-card)",
-                  border: "1px solid var(--border-subtle)",
-                  borderRadius: 8,
-                  color: "#fff",
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-          <Legend2 items={industryData.map((d) => ({ label: d.name, value: d.value, color: d.color }))} />
+          {industryData.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={industryData}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={55}
+                    outerRadius={85}
+                    paddingAngle={3}
+                  >
+                    {industryData.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} stroke="none" />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "var(--bg-card)",
+                      border: "1px solid var(--border-subtle)",
+                      borderRadius: 8,
+                      color: "#fff",
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <Legend2 items={industryData.map((d) => ({ label: d.name, value: d.value, color: d.color }))} />
+            </>
+          ) : (
+            <EmptyState label="No industry data available" />
+          )}
         </Panel>
       </div>
 
       {/* Top clients table */}
       <div className="mt-6">
         <Panel title="Top Clients by Active Projects" subtitle="Ranked by current project load">
-          <div className="overflow-hidden rounded-lg border border-[var(--border-subtle)]">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-gray-500 uppercase tracking-wider bg-[var(--bg-main)]">
-                  <th className="px-4 py-3 font-medium">Company</th>
-                  <th className="px-4 py-3 font-medium">Industry</th>
-                  <th className="px-4 py-3 font-medium text-right">Active Projects</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topClients.map((client, i) => (
-                  <tr key={client.name} className={i !== topClients.length - 1 ? "border-b border-[var(--border-subtle)]" : ""}>
-                    <td className="px-4 py-3 text-gray-200 font-medium">{client.name}</td>
-                    <td className="px-4 py-3 text-gray-400">{client.industry}</td>
-                    <td className="px-4 py-3 text-right text-gray-200">{client.projects}</td>
+          {topClients.length > 0 ? (
+            <div className="overflow-hidden rounded-lg border border-[var(--border-subtle)]">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-gray-500 uppercase tracking-wider bg-[var(--bg-main)]">
+                    <th className="px-4 py-3 font-medium">Company</th>
+                    <th className="px-4 py-3 font-medium">Industry</th>
+                    <th className="px-4 py-3 font-medium text-right">Active Projects</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {topClients.map((client, i) => (
+                    <tr key={client.name} className={i !== topClients.length - 1 ? "border-b border-[var(--border-subtle)]" : ""}>
+                      <td className="px-4 py-3 text-gray-200 font-medium">{client.name}</td>
+                      <td className="px-4 py-3 text-gray-400">{client.industry}</td>
+                      <td className="px-4 py-3 text-right text-gray-200">{client.projects}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState label="No client data available" />
+          )}
         </Panel>
       </div>
     </div>

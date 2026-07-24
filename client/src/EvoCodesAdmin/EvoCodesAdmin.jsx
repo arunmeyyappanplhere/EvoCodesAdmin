@@ -284,8 +284,8 @@ export default function EvoCodesAdmin() {
 
         {/* Auth Modal */}
         {isAuthModalOpen && (
-          <div className="relative z-10 w-full max-w-md p-4">
-            <div className="bg-[#0f1422] border border-[#1e2640] rounded-xl w-full p-6 shadow-2xl relative text-gray-200">
+          <div className="relative z-10 p-4">
+            <div className="bg-[#0f1422] border border-[#1e2640] rounded-xl w-full max-w-md p-6 shadow-2xl relative text-gray-200 mx-auto">
               <button 
                 onClick={() => setIsAuthModalOpen(false)}
                 className="absolute top-4 right-4 text-gray-400 hover:text-white"
@@ -648,7 +648,7 @@ export default function EvoCodesAdmin() {
 
         {/* Dynamic Route Display */}
         {activeTab === 'Dashboard' ? (
-          <Dashboard isDarkMode={isDarkMode} />
+          <Dashboard isDarkMode={isDarkMode} onNavigate={setActiveTab} />
         ) : activeTab === 'Analytics' ? (
           <Analytics isDarkMode={isDarkMode} />
         ) : activeTab === 'Contact Requests' ? (
