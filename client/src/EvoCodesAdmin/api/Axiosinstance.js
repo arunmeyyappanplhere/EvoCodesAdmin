@@ -9,6 +9,7 @@ const axiosInstance = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
+  timeout: 5000, // 5 second timeout to prevent hanging
 });
 
 // Optional: centralize handling of expired/invalid sessions.

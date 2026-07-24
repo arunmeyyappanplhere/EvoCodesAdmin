@@ -5,7 +5,7 @@ import {
 import SidebarButton from './SidebarButton';
 
 // Replace this path with your actual image path or asset import
-import evoLogo from './../../public/EC-ICON.jpg'; 
+import evoLogo from '/EC-ICON.jpg?url'; 
 
 export default function Sidebar({ activeTab, setActiveTab, onLogout, isSidebarOpen, setIsSidebarOpen }) {
   return (

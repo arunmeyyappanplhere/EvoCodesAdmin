@@ -13,7 +13,8 @@ import {
   AlertCircle,
   X,
 } from "lucide-react";
-import axiosInstance from "./api/Axiosinstance"; // adjust this path to wherever Axiosinstance.js actually lives
+import axiosInstance from "./api/Axiosinstance";
+import AlertModal from "./AlertModal";
 
 // A curated shortlist shown in the icon picker's dropdown/autocomplete.
 // Admins can still type ANY valid lucide-react icon name (PascalCase) and it will work.
@@ -80,6 +81,15 @@ export default function ServicesPage({ isDarkMode = true }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null); // serviceID being edited, or null when adding
   const [form, setForm] = useState(emptyServiceForm);
+  const [alertConfig, setAlertConfig] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info',
+    onConfirm: null,
+    confirmText: 'OK',
+    showCancel: false
+  });
 
   // ---- Load services from the API on mount ----
   const fetchServices = async () => {
@@ -209,14 +219,24 @@ export default function ServicesPage({ isDarkMode = true }) {
 
   // ---- Delete ----
   const handleDelete = async (serviceID) => {
-    if (!confirm("Are you sure you want to delete this service?")) return;
-    setError(null);
-    try {
-      await axiosInstance.delete(`/services/${serviceID}`);
-      setServices((prev) => prev.filter((s) => s.serviceID !== serviceID));
-    } catch (err) {
-      setError("Failed to delete the service. Please try again.");
-    }
+    setAlertConfig({
+      isOpen: true,
+      title: 'Confirm Delete',
+      message: 'Are you sure you want to delete this service?',
+      type: 'warning',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      showCancel: true,
+      onConfirm: async () => {
+        setError(null);
+        try {
+          await axiosInstance.delete(`/services/${serviceID}`);
+          setServices((prev) => prev.filter((s) => s.serviceID !== serviceID));
+        } catch (err) {
+          setError("Failed to delete the service. Please try again.");
+        }
+      }
+    });
   };
 
   const PreviewIcon = getIconComponent(form.serviceIcon);
@@ -400,6 +420,19 @@ export default function ServicesPage({ isDarkMode = true }) {
           </div>
         </div>
       </div>
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertConfig.isOpen}
+        onClose={() => setAlertConfig({ ...alertConfig, isOpen: false })}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        confirmText={alertConfig.confirmText}
+        cancelText={alertConfig.cancelText}
+        showCancel={alertConfig.showCancel}
+        onConfirm={alertConfig.onConfirm}
+      />
 
       {/* Service Modal */}
       {modalOpen && (

@@ -17,7 +17,8 @@ import {
   ImagePlus,
 } from "lucide-react";
 import Modal, { Field, inputClass, selectClass } from "./Modal";
-import axiosInstance from "./api/Axiosinstance"; // adjust this path to wherever Axiosinstance.js actually lives
+import axiosInstance from "./api/Axiosinstance";
+import AlertModal from "./AlertModal";
 
 const STATUS_STYLES = {
   Published: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
@@ -81,6 +82,15 @@ export default function BlogsPage({ isDarkMode = true }) {
   const [form, setForm] = useState(emptyBlogForm);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [alertConfig, setAlertConfig] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info',
+    onConfirm: null,
+    confirmText: 'OK',
+    showCancel: false
+  });
 
   // Search and Filtering states
   const [searchQuery, setSearchQuery] = useState("");
@@ -224,29 +234,49 @@ export default function BlogsPage({ isDarkMode = true }) {
   };
 
   const handleDeleteOne = async (id) => {
-    if (!confirm("Are you sure you want to delete this blog?")) return;
-    setError(null);
-    try {
-      await axiosInstance.delete(`/blogs/${id}`);
-      setBlogs((prev) => prev.filter((b) => b.blogID !== id));
-      setSelected((prev) => prev.filter((x) => x !== id));
-    } catch (err) {
-      setError("Failed to delete the blog. Please try again.");
-    }
+    setAlertConfig({
+      isOpen: true,
+      title: 'Confirm Delete',
+      message: 'Are you sure you want to delete this blog?',
+      type: 'warning',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      showCancel: true,
+      onConfirm: async () => {
+        setError(null);
+        try {
+          await axiosInstance.delete(`/blogs/${id}`);
+          setBlogs((prev) => prev.filter((b) => b.blogID !== id));
+          setSelected((prev) => prev.filter((x) => x !== id));
+        } catch (err) {
+          setError("Failed to delete the blog. Please try again.");
+        }
+      }
+    });
   };
 
   const handleBulkDelete = async () => {
-    if (!confirm(`Delete ${selected.length} selected blog(s)?`)) return;
-    setError(null);
-    const ids = [...selected];
-    try {
-      await Promise.all(ids.map((id) => axiosInstance.delete(`/blogs/${id}`)));
-      setBlogs((prev) => prev.filter((b) => !ids.includes(b.blogID)));
-      setSelected([]);
-    } catch (err) {
-      setError("Some blogs couldn't be deleted. Refreshing the list.");
-      fetchBlogs();
-    }
+    setAlertConfig({
+      isOpen: true,
+      title: 'Confirm Bulk Delete',
+      message: `Delete ${selected.length} selected blog(s)?`,
+      type: 'warning',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      showCancel: true,
+      onConfirm: async () => {
+        setError(null);
+        const ids = [...selected];
+        try {
+          await Promise.all(ids.map((id) => axiosInstance.delete(`/blogs/${id}`)));
+          setBlogs((prev) => prev.filter((b) => !ids.includes(b.blogID)));
+          setSelected([]);
+        } catch (err) {
+          setError("Some blogs couldn't be deleted. Refreshing the list.");
+          fetchBlogs();
+        }
+      }
+    });
   };
 
   const handleBulkDraft = async () => {
@@ -664,6 +694,19 @@ export default function BlogsPage({ isDarkMode = true }) {
           </div>
         </div>
       </Modal>
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertConfig.isOpen}
+        onClose={() => setAlertConfig({ ...alertConfig, isOpen: false })}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        confirmText={alertConfig.confirmText}
+        cancelText={alertConfig.cancelText}
+        showCancel={alertConfig.showCancel}
+        onConfirm={alertConfig.onConfirm}
+      />
     </div>
   );
 }
