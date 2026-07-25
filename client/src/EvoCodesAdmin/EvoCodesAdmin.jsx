@@ -196,6 +196,12 @@ export default function EvoCodesAdmin() {
     localStorage.setItem('evocodes_projects', JSON.stringify(projects));
   }, [projects]);
 
+  // Dynamic page title based on active tab
+  useEffect(() => {
+    const pageTitle = activeTab.charAt(0).toUpperCase() + activeTab.slice(1);
+    document.title = `${pageTitle} | EvoCodes Admin`;
+  }, [activeTab]);
+
   useEffect(() => { setCurrentPage(1); }, [searchTerm, globalSearch, categoryFilter, statusFilter]);
 
   const processedProjects = useMemo(() => {
@@ -299,7 +305,7 @@ export default function EvoCodesAdmin() {
 
         {/* Dynamic Route Display */}
         {activeTab === 'Dashboard' ? (
-          <Dashboard isDarkMode={isDarkMode} />
+          <Dashboard isDarkMode={isDarkMode} onNavigate={setActiveTab} />
         ) : activeTab === 'Analytics' ? (
           <Analytics isDarkMode={isDarkMode} />
         ) : activeTab === 'Contact Requests' ? (

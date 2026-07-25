@@ -62,20 +62,6 @@ const StatCard = ({ icon: Icon, label, value, trend, accent }) => (
   </div>
 );
 
-const ActivityItem = ({ dot, title, subtitle, time }) => (
-  <div className="flex items-start gap-3 py-3 border-b border-[var(--border-subtle)] last:border-0">
-    <span
-      className="mt-1.5 w-2 h-2 rounded-full shrink-0"
-      style={{ backgroundColor: dot }}
-    />
-    <div className="flex-1 min-w-0">
-      <p className="text-sm text-gray-200 truncate">{title}</p>
-      <p className="text-xs text-gray-500">{subtitle}</p>
-    </div>
-    <span className="text-xs text-gray-500 whitespace-nowrap">{time}</span>
-  </div>
-);
-
 const QuickAction = ({ icon: Icon, label, onClick }) => (
   <button
     onClick={onClick}
@@ -86,7 +72,7 @@ const QuickAction = ({ icon: Icon, label, onClick }) => (
   </button>
 );
 
-export default function Dashboard() {
+export default function Dashboard({ isDarkMode, onNavigate }) {
   const [stats, setStats] = useState({
     employees: 0,
     clients: 0,
@@ -97,7 +83,6 @@ export default function Dashboard() {
     contactRequests: 0,
   });
   const [departmentData, setDepartmentData] = useState([]);
-  const [activity, setActivity] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -135,33 +120,6 @@ export default function Dashboard() {
         { name: "Marketing", value: 24, color: "#818CF8" },
         { name: "Operations", value: 22, color: "#FBBF24" },
       ]);
-
-      setActivity([
-        {
-          dot: "#38BDF8",
-          title: "New contact request from David Miller",
-          subtitle: "Quantum Logistics",
-          time: "2h ago",
-        },
-        {
-          dot: "#34D399",
-          title: '"Scaling GraphQL at Evo Codes" published',
-          subtitle: "Blog · Engineering",
-          time: "5h ago",
-        },
-        {
-          dot: "#818CF8",
-          title: "VitalStream added as a new client",
-          subtitle: "Health Tech",
-          time: "1d ago",
-        },
-        {
-          dot: "#FBBF24",
-          title: "Marcus Chen set to On Leave",
-          subtitle: "Operations",
-          time: "2d ago",
-        },
-      ]);
     } catch (err) {
       console.error("Failed to load dashboard data:", err);
     } finally {
@@ -193,10 +151,10 @@ export default function Dashboard() {
 
       {/* Quick actions */}
       <div className="flex flex-wrap gap-3 mb-8">
-        <QuickAction icon={UserPlus} label="Add Employee" />
-        <QuickAction icon={PlusCircle} label="Add Service" />
-        <QuickAction icon={Building2} label="Add Client" />
-        <QuickAction icon={BookOpen} label="New Blog Post" />
+        <QuickAction icon={UserPlus} label="Add Employee" onClick={() => onNavigate('Employees')} />
+        <QuickAction icon={PlusCircle} label="Add Service" onClick={() => onNavigate('Services')} />
+        <QuickAction icon={Building2} label="Add Client" onClick={() => onNavigate('Clients')} />
+        <QuickAction icon={BookOpen} label="New Blog Post" onClick={() => onNavigate('Blogs')} />
       </div>
 
       {/* Stat cards */}
@@ -209,7 +167,7 @@ export default function Dashboard() {
       {/* Chart + activity feed */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Department distribution */}
-        <div className="lg:col-span-2 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6">
+        <div className="lg:col-span-3 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6">
           <h2 className="text-sm font-semibold text-gray-200 mb-1">
             Department Distribution
           </h2>
@@ -243,21 +201,6 @@ export default function Dashboard() {
               </Bar>
             </BarChart>
           </ResponsiveContainer>
-        </div>
-
-        {/* Recent activity */}
-        <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-6">
-          <h2 className="text-sm font-semibold text-gray-200 mb-1">
-            Recent Activity
-          </h2>
-          <p className="text-xs text-gray-500 mb-2">
-            Latest updates across the console
-          </p>
-          <div>
-            {activity.map((item, i) => (
-              <ActivityItem key={i} {...item} />
-            ))}
-          </div>
         </div>
       </div>
     </div>
