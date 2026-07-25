@@ -13,14 +13,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
-
-// -----------------------------------------------------------------------
-// Analytics
-// Trend + distribution views built from your Clients, Services, and
-// Employees data. Wire loadAnalyticsData() to your real endpoints
-// (GET /clients, GET /services, GET /employees) and derive the shapes
-// below from the response instead of the placeholder data.
-// -----------------------------------------------------------------------
+import axiosInstance from "./api/axiosInstance";
 
 const SERVICE_STATUS_COLORS = {
   Active: "#34D399",
@@ -74,42 +67,52 @@ export default function Analytics() {
 
   const loadAnalyticsData = async (selectedRange) => {
     try {
-      // Replace with real endpoints, e.g.:
-      // const [clientsRes, servicesRes] = await Promise.all([
-      //   fetch("/clients").then((r) => r.json()),
-      //   fetch("/services").then((r) => r.json()),
-      // ]);
-      // Then bucket clientsRes by month / industry, and servicesRes by status.
-
-      setGrowthData([
-        { month: "Feb", clients: 96, employees: 112 },
-        { month: "Mar", clients: 101, employees: 115 },
-        { month: "Apr", clients: 108, employees: 118 },
-        { month: "May", clients: 114, employees: 121 },
-        { month: "Jun", clients: 119, employees: 124 },
-        { month: "Jul", clients: 124, employees: 128 },
+      const [growthRes, servicesRes, industryRes, topClientsRes] = await Promise.all([
+        axiosInstance.get("/analytics/growth-trend"),
+        axiosInstance.get("/analytics/services-status"),
+        axiosInstance.get("/analytics/clients-industry"),
+        axiosInstance.get("/analytics/top-clients"),
       ]);
 
-      setServiceStatusData([
-        { name: "Active", value: 2, color: SERVICE_STATUS_COLORS.Active },
-        { name: "Maintenance", value: 1, color: SERVICE_STATUS_COLORS.Maintenance },
-        { name: "Disabled", value: 1, color: SERVICE_STATUS_COLORS.Disabled },
-      ]);
+      // Growth trend: { months: [...], clients: [...], employees: [...] }
+      const growth = growthRes.data;
+      setGrowthData(
+        (growth.months ?? []).map((month, i) => ({
+          month,
+          clients: (growth.clients ?? [])[i] ?? 0,
+          employees: (growth.employees ?? [])[i] ?? 0,
+        }))
+      );
 
-      setIndustryData([
-        { name: "Cloud Infrastructure", value: 34, color: INDUSTRY_COLORS[0] },
-        { name: "Fintech", value: 28, color: INDUSTRY_COLORS[1] },
-        { name: "Health Tech", value: 22, color: INDUSTRY_COLORS[2] },
-        { name: "Logistics", value: 18, color: INDUSTRY_COLORS[3] },
-        { name: "Other", value: 22, color: INDUSTRY_COLORS[4] },
-      ]);
+      // Services by status: [{ status, count }, ...]
+      const servicesData = servicesRes.data ?? [];
+      setServiceStatusData(
+        servicesData.map((item) => ({
+          name: item.status ?? "Unknown",
+          value: item.count ?? 0,
+          color: SERVICE_STATUS_COLORS[item.status] || "#6B7280",
+        }))
+      );
 
-      setTopClients([
-        { name: "VitalStream", industry: "Health Tech", projects: 7 },
-        { name: "NexGen Systems", industry: "Cloud Infrastructure", projects: 4 },
-        { name: "Vertex Finance", industry: "Fintech", projects: 2 },
-        { name: "Quantum Logistics", industry: "Logistics", projects: 1 },
-      ]);
+      // Clients by industry: [{ industry, count }, ...]
+      const industryRaw = industryRes.data ?? [];
+      setIndustryData(
+        industryRaw.map((item, i) => ({
+          name: item.industry ?? "Other",
+          value: item.count ?? 0,
+          color: INDUSTRY_COLORS[i % INDUSTRY_COLORS.length],
+        }))
+      );
+
+      // Top clients: [{ company, industry, activeProjects }, ...]
+      const topRaw = topClientsRes.data ?? [];
+      setTopClients(
+        topRaw.map((item) => ({
+          name: item.company ?? "Unknown",
+          industry: item.industry ?? "—",
+          projects: item.activeProjects ?? 0,
+        }))
+      );
     } catch (err) {
       console.error("Failed to load analytics data:", err);
     }

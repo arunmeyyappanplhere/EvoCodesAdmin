@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { 
   Search, 
   UserPlus, 
@@ -12,38 +12,26 @@ import {
   Briefcase, 
   X, 
   Pencil, 
-  Trash2 
+  Trash2,
+  Upload
 } from 'lucide-react';
-
-const INITIAL_EMPLOYEES = [
-  { id: 1, name: 'Alex Thorne', position: 'Principal Engineer', department: 'Engineering', email: 'a.thorne@evocodes.ai', status: 'ACTIVE', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=60' },
-  { id: 2, name: 'Elena Vance', position: 'Design Lead', department: 'Design', email: 'e.vance@evocodes.ai', status: 'ACTIVE', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&auto=format&fit=crop&q=60' },
-  { id: 3, name: 'Marcus Chen', position: 'Ops Director', department: 'Operations', email: 'm.chen@evocodes.ai', status: 'ON LEAVE', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=80&auto=format&fit=crop&q=60' },
-  { id: 4, name: 'Sarah Jenkins', position: 'Cloud Architect', department: 'Engineering', email: 's.jenkins@evocodes.ai', status: 'ACTIVE', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&auto=format&fit=crop&q=60' },
-];
+import axiosInstance from './api/axiosInstance';
 
 const DEPARTMENTS = ['All Departments', 'Engineering', 'Design', 'Marketing', 'Operations'];
 
-const DEPARTMENT_STATS = [
-  { name: 'Engineering', count: 64, change: '+4 this month', progress: '65%', color: 'cyan', icon: Terminal },
-  { name: 'Design', count: 18, change: 'Stable', progress: '35%', color: 'emerald', icon: Palette },
-  { name: 'Marketing', count: 24, change: '+2 this month', progress: '45%', color: 'indigo', icon: Megaphone },
-  { name: 'Operations', count: 22, change: 'Stable', progress: '40%', color: 'amber', icon: Briefcase },
-];
-
 const EMPTY_EMPLOYEE_FORM = {
-  name: '',
-  position: '',
-  department: 'Engineering',
-  email: '',
-  status: 'ACTIVE',
-  avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=60'
+  employeeName: '',
+  employeePosition: '',
+  employeeDepartment: 'Engineering',
+  employeeEmail: '',
+  employeeStatus: 'ACTIVE',
 };
 
 const ITEMS_PER_PAGE = 5;
 
 export default function TeamManagementTable({ isDarkMode = true }) {
-  const [employees, setEmployees] = useState(INITIAL_EMPLOYEES);
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDept, setSelectedDept] = useState('All Departments');
   const [currentPage, setCurrentPage] = useState(1);
@@ -52,15 +40,56 @@ export default function TeamManagementTable({ isDarkMode = true }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEmployeeId, setEditingEmployeeId] = useState(null);
   const [form, setForm] = useState(EMPTY_EMPLOYEE_FORM);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef(null);
+
+  // Load employees on mount
+  useEffect(() => {
+    loadEmployees();
+  }, []);
+
+  const loadEmployees = async () => {
+    try {
+      setLoading(true);
+      const res = await axiosInstance.get("/employees");
+      setEmployees(res.data ?? []);
+    } catch (err) {
+      console.error("Failed to load employees:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Department distribution computed from live data
+  const departmentStats = useMemo(() => {
+    const deptMap = {};
+    employees.forEach((emp) => {
+      const dept = emp.employeeDepartment || "Unknown";
+      deptMap[dept] = (deptMap[dept] || 0) + 1;
+    });
+    const total = employees.length;
+    const icons = { Engineering: Terminal, Design: Palette, Marketing: Megaphone, Operations: Briefcase };
+    const colors = { Engineering: 'cyan', Design: 'emerald', Marketing: 'indigo', Operations: 'amber' };
+    return Object.entries(deptMap).map(([name, count]) => ({
+      name,
+      count,
+      change: total > 0 ? `${Math.round((count / total) * 100)}%` : "0%",
+      progress: total > 0 ? `${Math.round((count / total) * 100)}%` : "0%",
+      color: colors[name] || 'cyan',
+      icon: icons[name] || Terminal,
+    }));
+  }, [employees]);
 
   // Filtered dataset
   const filteredEmployees = useMemo(() => {
     return employees.filter(emp => {
       const query = searchQuery.toLowerCase();
-      const matchesSearch = emp.name.toLowerCase().includes(query) ||
-                            emp.position.toLowerCase().includes(query) ||
-                            emp.email.toLowerCase().includes(query);
-      const matchesDept = selectedDept === 'All Departments' || emp.department === selectedDept;
+      const matchesSearch = 
+        (emp.employeeName || '').toLowerCase().includes(query) ||
+        (emp.employeePosition || '').toLowerCase().includes(query) ||
+        (emp.employeeEmail || '').toLowerCase().includes(query);
+      const matchesDept = selectedDept === 'All Departments' || emp.employeeDepartment === selectedDept;
       return matchesSearch && matchesDept;
     });
   }, [employees, searchQuery, selectedDept]);
@@ -75,12 +104,20 @@ export default function TeamManagementTable({ isDarkMode = true }) {
   const openAddModal = () => {
     setEditingEmployeeId(null);
     setForm(EMPTY_EMPLOYEE_FORM);
+    setSelectedFile(null);
     setIsModalOpen(true);
   };
 
   const openEditModal = (emp) => {
-    setEditingEmployeeId(emp.id);
-    setForm(emp);
+    setEditingEmployeeId(emp.employeeId);
+    setForm({
+      employeeName: emp.employeeName || '',
+      employeePosition: emp.employeePosition || '',
+      employeeDepartment: emp.employeeDepartment || 'Engineering',
+      employeeEmail: emp.employeeEmail || '',
+      employeeStatus: emp.employeeStatus || 'ACTIVE',
+    });
+    setSelectedFile(null);
     setIsModalOpen(true);
   };
 
@@ -88,29 +125,86 @@ export default function TeamManagementTable({ isDarkMode = true }) {
     setIsModalOpen(false);
     setEditingEmployeeId(null);
     setForm(EMPTY_EMPLOYEE_FORM);
+    setSelectedFile(null);
   };
 
-  const handleSave = (e) => {
-    e.preventDefault();
-    if (!form.name.trim() || !form.email.trim()) return;
+  const handleChange = (key) => (e) =>
+    setForm((f) => ({ ...f, [key]: e.target.value }));
 
-    if (editingEmployeeId) {
-      setEmployees(prev => prev.map(emp => emp.id === editingEmployeeId ? { ...emp, ...form } : emp));
-    } else {
-      setEmployees(prev => [{ ...form, id: Date.now() }, ...prev]);
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
     }
-    closeModal();
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm("Are you sure you want to remove this employee?")) {
-      setEmployees(prev => prev.filter(emp => emp.id !== id));
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!form.employeeName.trim() || !form.employeeEmail.trim()) return;
+
+    // For CREATE, an image is required
+    if (!editingEmployeeId && !selectedFile) {
+      alert("Please select an employee photo.");
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("employeeName", form.employeeName.trim());
+      formData.append("employeePosition", form.employeePosition.trim());
+      formData.append("employeeDepartment", form.employeeDepartment);
+      formData.append("employeeEmail", form.employeeEmail.trim());
+      formData.append("employeeStatus", form.employeeStatus);
+
+      if (selectedFile) {
+        formData.append("employeeImage", selectedFile);
+      }
+
+      if (editingEmployeeId) {
+        await axiosInstance.put(`/employees/${editingEmployeeId}`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      } else {
+        await axiosInstance.post("/employees", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      }
+
+      closeModal();
+      loadEmployees();
+    } catch (err) {
+      console.error("Failed to save employee:", err);
+      const message =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        "Failed to save employee. Please try again.";
+      alert(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (employeeId) => {
+    if (!window.confirm("Are you sure you want to remove this employee?")) return;
+    try {
+      await axiosInstance.delete(`/employees/${employeeId}`);
+      loadEmployees();
+    } catch (err) {
+      console.error("Failed to delete employee:", err);
+      const message =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        "Failed to delete employee. Please try again.";
+      alert(message);
     }
   };
 
   const exportToCSV = () => {
     const headers = ["ID,Name,Position,Department,Email,Status\n"];
-    const rows = filteredEmployees.map(e => `${e.id},"${e.name}","${e.position}","${e.department}","${e.email}",${e.status}`);
+    const rows = filteredEmployees.map(e =>
+      `${e.employeeId || e._id},"${(e.employeeName || '').replace(/"/g, '""')}","${(e.employeePosition || '').replace(/"/g, '""')}","${(e.employeeDepartment || '').replace(/"/g, '""')}","${(e.employeeEmail || '').replace(/"/g, '""')}",${e.employeeStatus || ''}`
+    );
     const blob = new Blob([headers.concat(rows.join("\n")).join("")], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -170,7 +264,6 @@ export default function TeamManagementTable({ isDarkMode = true }) {
             ))}
           </select>
 
-
           <button 
             onClick={exportToCSV}
             aria-label="Export to CSV"
@@ -203,49 +296,62 @@ export default function TeamManagementTable({ isDarkMode = true }) {
               </tr>
             </thead>
             <tbody className={`divide-y text-sm ${isDarkMode ? 'divide-[#1e2640]/50' : 'divide-gray-200'}`}>
-              {paginatedEmployees.length === 0 ? (
+              {loading ? (
+                <tr>
+                  <td colSpan="7" className="py-12 text-center text-gray-500 text-xs">Loading employees...</td>
+                </tr>
+              ) : paginatedEmployees.length === 0 ? (
                 <tr>
                   <td colSpan="7" className="py-12 text-center text-gray-500 text-xs">No matching team members found.</td>
                 </tr>
               ) : (
-                paginatedEmployees.map((emp) => (
-                  <tr key={emp.id} className={`transition-colors ${isDarkMode ? 'hover:bg-[#141b2d]' : 'hover:bg-gray-50'}`}>
-                    <td className="py-4 px-6">
-                      <img src={emp.avatar} alt={emp.name} className="w-8 h-8 object-cover rounded-full border border-[#222f54]" />
-                    </td>
-                    <td className={`py-4 px-6 font-bold tracking-wide ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                      {emp.name}
-                    </td>
-                    <td className={`py-4 px-6 font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {emp.position}
-                    </td>
-                    <td className={`py-4 px-6 font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {emp.department}
-                    </td>
-                    <td className="py-4 px-6 text-xs font-mono text-gray-500">
-                      {emp.email}
-                    </td>
-                    <td className="py-4 px-6">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold ${
-                        emp.status === 'ACTIVE' 
-                          ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
-                          : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      }`}>
-                        {emp.status}
-                      </span>
-                    </td>
-                    <td className="py-4 px-6 text-right text-gray-500">
-                      <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => openEditModal(emp)} className="p-1 rounded hover:text-cyan-400 transition-colors cursor-pointer" aria-label="Edit employee">
-                          <Pencil size={15} />
-                        </button>
-                        <button onClick={() => handleDelete(emp.id)} className="p-1 rounded hover:text-rose-400 transition-colors cursor-pointer" aria-label="Delete employee">
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                paginatedEmployees.map((emp) => {
+                  const avatarUrl = emp.employeeImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(emp.employeeName || 'U')}&background=1e2640&color=fff`;
+                  const status = emp.employeeStatus || 'ACTIVE';
+                  return (
+                    <tr key={emp.employeeId || emp._id} className={`transition-colors ${isDarkMode ? 'hover:bg-[#141b2d]' : 'hover:bg-gray-50'}`}>
+                      <td className="py-4 px-6">
+                        <img 
+                          src={avatarUrl} 
+                          alt={emp.employeeName} 
+                          className="w-8 h-8 object-cover rounded-full border border-[#222f54]" 
+                          onError={(e) => { e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(emp.employeeName || 'U')}&background=1e2640&color=fff`; }}
+                        />
+                      </td>
+                      <td className={`py-4 px-6 font-bold tracking-wide ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                        {emp.employeeName}
+                      </td>
+                      <td className={`py-4 px-6 font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        {emp.employeePosition}
+                      </td>
+                      <td className={`py-4 px-6 font-medium ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        {emp.employeeDepartment}
+                      </td>
+                      <td className="py-4 px-6 text-xs font-mono text-gray-500">
+                        {emp.employeeEmail}
+                      </td>
+                      <td className="py-4 px-6">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] font-bold ${
+                          status === 'ACTIVE' 
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                            : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                        }`}>
+                          {status}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6 text-right text-gray-500">
+                        <div className="flex items-center justify-end gap-2">
+                          <button onClick={() => openEditModal(emp)} className="p-1 rounded hover:text-cyan-400 transition-colors cursor-pointer" aria-label="Edit employee">
+                            <Pencil size={15} />
+                          </button>
+                          <button onClick={() => handleDelete(emp.employeeId)} className="p-1 rounded hover:text-rose-400 transition-colors cursor-pointer" aria-label="Delete employee">
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -288,7 +394,7 @@ export default function TeamManagementTable({ isDarkMode = true }) {
           Department Distribution
         </h4>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {DEPARTMENT_STATS.map((dept) => (
+          {departmentStats.map((dept) => (
             <DepartmentCard key={dept.name} dept={dept} isDarkMode={isDarkMode} />
           ))}
         </div>
@@ -301,8 +407,12 @@ export default function TeamManagementTable({ isDarkMode = true }) {
           editingEmployeeId={editingEmployeeId}
           form={form}
           setForm={setForm}
+          selectedFile={selectedFile}
+          fileInputRef={fileInputRef}
+          onFileChange={handleFileChange}
           onClose={closeModal}
           onSave={handleSave}
+          saving={saving}
         />
       )}
     </div>
@@ -341,7 +451,10 @@ function DepartmentCard({ dept, isDarkMode }) {
   );
 }
 
-function EmployeeModal({ isDarkMode, editingEmployeeId, form, setForm, onClose, onSave }) {
+function EmployeeModal({ isDarkMode, editingEmployeeId, form, setForm, selectedFile, fileInputRef, onFileChange, onClose, onSave, saving }) {
+  const handleChange = (key) => (e) =>
+    setForm((f) => ({ ...f, [key]: e.target.value }));
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <div className={`w-full max-w-lg rounded-xl border p-6 space-y-4 shadow-2xl relative ${
@@ -360,8 +473,8 @@ function EmployeeModal({ isDarkMode, editingEmployeeId, form, setForm, onClose, 
             <input
               type="text"
               required
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              value={form.employeeName}
+              onChange={handleChange('employeeName')}
               placeholder="e.g. Alex Thorne"
               className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 focus:outline-none ${
                 isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
@@ -374,8 +487,8 @@ function EmployeeModal({ isDarkMode, editingEmployeeId, form, setForm, onClose, 
             <input
               type="text"
               required
-              value={form.position}
-              onChange={(e) => setForm({ ...form, position: e.target.value })}
+              value={form.employeePosition}
+              onChange={handleChange('employeePosition')}
               placeholder="e.g. Lead Developer"
               className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 focus:outline-none ${
                 isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
@@ -386,8 +499,8 @@ function EmployeeModal({ isDarkMode, editingEmployeeId, form, setForm, onClose, 
           <div className="space-y-1">
             <label className="text-gray-400 font-medium">Department</label>
             <select
-              value={form.department}
-              onChange={(e) => setForm({ ...form, department: e.target.value })}
+              value={form.employeeDepartment}
+              onChange={handleChange('employeeDepartment')}
               className={`w-full p-2.5 rounded-lg border focus:ring-0 focus:outline-none ${
                 isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-white' : 'bg-white border-gray-300 text-gray-900'
               }`}
@@ -403,8 +516,8 @@ function EmployeeModal({ isDarkMode, editingEmployeeId, form, setForm, onClose, 
             <input
               type="email"
               required
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              value={form.employeeEmail}
+              onChange={handleChange('employeeEmail')}
               placeholder="a.thorne@evocodes.ai"
               className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 focus:outline-none ${
                 isDarkMode ? 'border-[#1e2640] text-white' : 'border-gray-300 text-gray-900'
@@ -413,10 +526,38 @@ function EmployeeModal({ isDarkMode, editingEmployeeId, form, setForm, onClose, 
           </div>
 
           <div className="col-span-2 space-y-1">
+            <label className="text-gray-400 font-medium">
+              Photo {editingEmployeeId ? "(leave empty to keep current)" : ""}
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={onFileChange}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs transition-colors ${
+                  isDarkMode ? 'border-[#1e2640] text-gray-300 hover:bg-[#141b2d]' : 'border-gray-300 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                <Upload size={14} />
+                {selectedFile ? selectedFile.name : "Choose Image"}
+              </button>
+              {selectedFile && (
+                <span className="text-[10px] text-cyan-400">{(selectedFile.size / 1024).toFixed(1)} KB</span>
+              )}
+            </div>
+          </div>
+
+          <div className="col-span-2 space-y-1">
             <label className="text-gray-400 font-medium">Status</label>
             <select
-              value={form.status}
-              onChange={(e) => setForm({ ...form, status: e.target.value })}
+              value={form.employeeStatus}
+              onChange={handleChange('employeeStatus')}
               className={`w-full p-2.5 rounded-lg border focus:ring-0 focus:outline-none ${
                 isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-white' : 'bg-white border-gray-300 text-gray-900'
               }`}
@@ -436,9 +577,10 @@ function EmployeeModal({ isDarkMode, editingEmployeeId, form, setForm, onClose, 
             </button>
             <button
               type="submit"
-              className="px-4 py-2 rounded-lg bg-[#72efdd] text-[#0b0f17] text-xs font-bold hover:bg-[#52e3d0] transition-colors cursor-pointer"
+              disabled={saving}
+              className="px-4 py-2 rounded-lg bg-[#72efdd] text-[#0b0f17] text-xs font-bold hover:bg-[#52e3d0] transition-colors cursor-pointer disabled:opacity-50"
             >
-              Save Member
+              {saving ? "Saving..." : editingEmployeeId ? "Save Changes" : "Add Member"}
             </button>
           </div>
         </form>

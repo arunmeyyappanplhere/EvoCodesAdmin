@@ -1,6 +1,4 @@
-'use client';
-
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Plus,
   Download,
@@ -12,6 +10,7 @@ import {
   Minus,
   X,
 } from "lucide-react";
+import axiosInstance from "./api/axiosInstance";
 
 // Local Sub-components for Form Fields and Modal
 const inputClass =
@@ -57,68 +56,6 @@ function Modal({ open, onClose, title, subtitle, children, footer }) {
   );
 }
 
-const STATS = [
-  { label: "Total Clients", value: "124", delta: "+12%", trend: "up" },
-  { label: "Active Projects", value: "42", delta: "Stable", trend: "flat" },
-  { label: "Revenue Growth", value: "32.5k", delta: "+8%", trend: "up" },
-  { label: "Retention Rate", value: "98.2%", delta: "High", trend: "up" },
-];
-
-const CLIENTS = [
-  {
-    id: 1,
-    company: "NexGen Systems",
-    domain: "nexgen-systems.io",
-    initials: "NG",
-    color: "bg-cyan-500/20 text-cyan-300",
-    contact: "Sarah Jenkins",
-    contactEmail: "s.jenkins@nexgen.io",
-    industry: "Cloud Infrastructure",
-    activeProjects: 4,
-    team: ["SJ", "MC", "+2"],
-    status: "Active",
-  },
-  {
-    id: 2,
-    company: "Vertex Finance",
-    domain: "vertex-fin.com",
-    initials: "VF",
-    color: "bg-violet-500/20 text-violet-300",
-    contact: "Marcus Zhao",
-    contactEmail: "m.zhao@vertex.com",
-    industry: "Fintech",
-    activeProjects: 2,
-    team: ["MZ"],
-    status: "Active",
-  },
-  {
-    id: 3,
-    company: "VitalStream",
-    domain: "vitalstream.med",
-    initials: "VS",
-    color: "bg-emerald-500/20 text-emerald-300",
-    contact: "Dr. Elena Kostic",
-    contactEmail: "e.kostic@vitalstream.med",
-    industry: "Health Tech",
-    activeProjects: 7,
-    team: ["EK", "AT", "+4"],
-    status: "Pending Review",
-  },
-  {
-    id: 4,
-    company: "Quantum Logistics",
-    domain: "quantum-logistics.net",
-    initials: "QL",
-    color: "bg-amber-500/20 text-amber-300",
-    contact: "David Miller",
-    contactEmail: "d.miller@quantum.net",
-    industry: "Logistics",
-    activeProjects: 1,
-    team: ["DM"],
-    status: "On Hold",
-  },
-];
-
 const STATUS_STYLES = {
   Active: "bg-emerald-500/10 text-emerald-400",
   "Pending Review": "bg-amber-500/10 text-amber-400",
@@ -146,121 +83,143 @@ const INDUSTRY_OPTIONS = [
 ];
 
 const emptyClientForm = {
-  company: "",
-  domain: "",
-  contact: "",
-  contactEmail: "",
+  companyName: "",
+  companyDomain: "",
+  primaryContactName: "",
+  primaryContactEmail: "",
   industry: INDUSTRY_OPTIONS[0],
   activeProjects: 0,
-  status: STATUS_OPTIONS[0],
+  clientStatus: STATUS_OPTIONS[0],
 };
 
 export default function ClientsPage({ isDarkMode = true }) {
-  const [clients, setClients] = useState(CLIENTS);
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("All");
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState(null);
+  const [editingClientID, setEditingClientID] = useState(null);
   const [form, setForm] = useState(emptyClientForm);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    loadClients();
+  }, []);
+
+  const loadClients = async () => {
+    try {
+      setLoading(true);
+      const res = await axiosInstance.get("/clients");
+      setClients(res.data ?? []);
+    } catch (err) {
+      console.error("Failed to load clients:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredClients = useMemo(() => {
     if (filter === "All") return clients;
     if (filter === "Active")
-      return clients.filter((c) => c.status === "Active");
-    return clients.filter((c) => c.status === "Archived");
+      return clients.filter((c) => c.clientStatus === "Active");
+    return clients.filter((c) => c.clientStatus === "Archived");
   }, [filter, clients]);
 
+  // Generate initials from company name
+  const getInitials = (name) =>
+    (name ?? "")
+      .split(" ")
+      .filter(Boolean)
+      .map((word) => word[0])
+      .join("")
+      .substring(0, 2)
+      .toUpperCase() || "CL";
+
   const openCreateModal = () => {
-    setEditingId(null);
+    setEditingClientID(null);
     setForm(emptyClientForm);
     setModalOpen(true);
   };
 
   const openEditModal = (client) => {
-    setEditingId(client.id);
+    setEditingClientID(client.clientID);
     setForm({
-      company: client.company,
-      domain: client.domain,
-      contact: client.contact,
-      contactEmail: client.contactEmail,
-      industry: client.industry,
-      activeProjects: client.activeProjects,
-      status: client.status,
+      companyName: client.companyName || "",
+      companyDomain: client.companyDomain || "",
+      primaryContactName: client.primaryContactName || "",
+      primaryContactEmail: client.primaryContactEmail || "",
+      industry: client.industry || INDUSTRY_OPTIONS[0],
+      activeProjects: client.activeProjects ?? 0,
+      clientStatus: client.clientStatus || STATUS_OPTIONS[0],
     });
     setModalOpen(true);
   };
 
   const closeModal = () => {
     setModalOpen(false);
-    setEditingId(null);
+    setEditingClientID(null);
     setForm(emptyClientForm);
   };
 
   const handleChange = (key) => (e) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
 
-  const handleSave = () => {
-    if (!form.company.trim()) return;
+  const handleSave = async () => {
+    if (!form.companyName.trim()) return;
+    setSaving(true);
 
-    const initials = form.company
-      ? form.company
-          .split(" ")
-          .filter(Boolean)
-          .map((word) => word[0])
-          .join("")
-          .substring(0, 2)
-          .toUpperCase()
-      : "CL";
-
-    const contactInitials = form.contact
-      ? form.contact
-          .split(" ")
-          .filter(Boolean)
-          .map((word) => word[0])
-          .join("")
-          .substring(0, 2)
-          .toUpperCase()
-      : "NA";
-
-    if (editingId !== null) {
-      setClients((prev) =>
-        prev.map((c) =>
-          c.id === editingId
-            ? {
-                ...c,
-                ...form,
-                initials,
-                activeProjects: Number(form.activeProjects) || 0,
-              }
-            : c
-        )
-      );
-    } else {
-      const newClient = {
-        id: Date.now(),
-        ...form,
-        initials,
-        color: COLOR_OPTIONS[Math.floor(Math.random() * COLOR_OPTIONS.length)],
+    try {
+      const payload = {
+        companyName: form.companyName.trim(),
+        companyDomain: form.companyDomain.trim(),
+        primaryContactName: form.primaryContactName.trim(),
+        primaryContactEmail: form.primaryContactEmail.trim(),
+        industry: form.industry,
         activeProjects: Number(form.activeProjects) || 0,
-        team: [contactInitials],
+        clientStatus: form.clientStatus,
       };
-      setClients((prev) => [newClient, ...prev]);
+
+      if (editingClientID) {
+        await axiosInstance.put(`/clients/${editingClientID}`, payload);
+      } else {
+        await axiosInstance.post("/clients", payload);
+      }
+
+      closeModal();
+      loadClients();
+    } catch (err) {
+      console.error("Failed to save client:", err);
+      const message =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        "Failed to save client. Please try again.";
+      alert(message);
+    } finally {
+      setSaving(false);
     }
-
-    closeModal();
   };
 
-  const handleDelete = (id) => {
-    setClients((prev) => prev.filter((c) => c.id !== id));
+  const handleDelete = async (clientID) => {
+    if (!window.confirm("Are you sure you want to delete this client?")) return;
+    try {
+      await axiosInstance.delete(`/clients/${clientID}`);
+      loadClients();
+    } catch (err) {
+      console.error("Failed to delete client:", err);
+      const message =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        "Failed to delete client. Please try again.";
+      alert(message);
+    }
   };
 
-  // Automated CSV Export Handler
+  // CSV Export Handler
   const handleExportCSV = () => {
     if (!filteredClients || filteredClients.length === 0) {
       alert("No client records found to export.");
       return;
     }
 
-    // CSV Headers
     const headers = [
       "Company",
       "Domain",
@@ -271,18 +230,16 @@ export default function ClientsPage({ isDarkMode = true }) {
       "Status",
     ];
 
-    // Escape double quotes and format row data
     const rows = filteredClients.map((c) => [
-      `"${(c.company || "").replace(/"/g, '""')}"`,
-      `"${(c.domain || "").replace(/"/g, '""')}"`,
-      `"${(c.contact || "").replace(/"/g, '""')}"`,
-      `"${(c.contactEmail || "").replace(/"/g, '""')}"`,
+      `"${(c.companyName || "").replace(/"/g, '""')}"`,
+      `"${(c.companyDomain || "").replace(/"/g, '""')}"`,
+      `"${(c.primaryContactName || "").replace(/"/g, '""')}"`,
+      `"${(c.primaryContactEmail || "").replace(/"/g, '""')}"`,
       `"${(c.industry || "").replace(/"/g, '""')}"`,
       c.activeProjects || 0,
-      `"${(c.status || "").replace(/"/g, '""')}"`,
+      `"${(c.clientStatus || "").replace(/"/g, '""')}"`,
     ]);
 
-    // Build standard CSV string with utf-8 BOM to preserve special characters in Excel
     const csvContent =
       "\uFEFF" +
       [headers.join(","), ...rows.map((r) => r.join(","))].join("\r\n");
@@ -291,15 +248,10 @@ export default function ClientsPage({ isDarkMode = true }) {
       const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
-
       link.href = url;
       link.setAttribute("download", `clients_${filter.toLowerCase()}_export.csv`);
       document.body.appendChild(link);
-      
-      // Trigger click event
       link.click();
-
-      // Clean up DOM references
       setTimeout(() => {
         document.body.removeChild(link);
         window.URL.revokeObjectURL(url);
@@ -340,7 +292,12 @@ export default function ClientsPage({ isDarkMode = true }) {
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {STATS.map((stat) => (
+        {[
+          { label: "Total Clients", value: clients.length, delta: "", trend: "flat" },
+          { label: "Active Projects", value: clients.reduce((s, c) => s + (c.activeProjects || 0), 0), delta: "", trend: "flat" },
+          { label: "Active Clients", value: clients.filter((c) => c.clientStatus === "Active").length, delta: "", trend: "flat" },
+          { label: "Industries Served", value: new Set(clients.map((c) => c.industry).filter(Boolean)).size, delta: "", trend: "flat" },
+        ].map((stat) => (
           <div
             key={stat.label}
             className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"
@@ -350,19 +307,6 @@ export default function ClientsPage({ isDarkMode = true }) {
             </p>
             <div className="mt-2 flex items-end justify-between">
               <p className="text-2xl font-bold text-white">{stat.value}</p>
-              <span
-                className={[
-                  "flex items-center gap-1 text-xs font-semibold",
-                  stat.trend === "up" ? "text-emerald-400" : "text-slate-400",
-                ].join(" ")}
-              >
-                {stat.trend === "up" ? (
-                  <TrendingUp size={12} />
-                ) : (
-                  <Minus size={12} />
-                )}
-                {stat.delta}
-              </span>
             </div>
           </div>
         ))}
@@ -412,118 +356,104 @@ export default function ClientsPage({ isDarkMode = true }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/70">
-            {filteredClients.map((client) => (
-              <tr key={client.id} className="hover:bg-slate-800/30">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold ${client.color}`}
-                    >
-                      {client.initials}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-slate-100">
-                        {client.company}
-                      </p>
-                      <p className="text-xs text-slate-500">{client.domain}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <p className="text-slate-200">{client.contact}</p>
-                  <p className="text-xs text-slate-500">
-                    {client.contactEmail}
-                  </p>
-                </td>
-                <td className="px-6 py-4">
-                  <span className="rounded-md bg-slate-800 px-2 py-1 text-xs font-medium uppercase tracking-wide text-slate-300">
-                    {client.industry}
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-slate-100">
-                      {String(client.activeProjects).padStart(2, "0")}
-                    </span>
-                    <div className="flex -space-x-2">
-                      {client.team.map((t, i) => (
-                        <span
-                          key={i}
-                          className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-slate-900 bg-slate-700 text-[10px] font-semibold text-slate-200"
-                        >
-                          {t}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
-                      STATUS_STYLES[client.status]
-                    }`}
-                  >
-                    <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                    {client.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <div className="flex items-center justify-end gap-3 text-slate-400">
-                    <button
-                      onClick={() => openEditModal(client)}
-                      className="hover:text-cyan-400"
-                      aria-label="Edit"
-                    >
-                      <Pencil size={16} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(client.id)}
-                      className="hover:text-rose-400"
-                      aria-label="Delete"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
+            {loading ? (
+              <tr>
+                <td colSpan="6" className="py-12 text-center text-slate-500 text-xs">
+                  Loading clients...
                 </td>
               </tr>
-            ))}
+            ) : filteredClients.length === 0 ? (
+              <tr>
+                <td colSpan="6" className="py-12 text-center text-slate-500 text-xs">
+                  No clients found.
+                </td>
+              </tr>
+            ) : (
+              filteredClients.map((client) => {
+                const initials = getInitials(client.companyName);
+                const colorIdx =
+                  (filteredClients.indexOf(client) + client.activeProjects) %
+                  COLOR_OPTIONS.length;
+                const color = COLOR_OPTIONS[colorIdx] || COLOR_OPTIONS[0];
+                return (
+                  <tr key={client.clientID || client._id} className="hover:bg-slate-800/30">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold ${color}`}
+                        >
+                          {initials}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-100">
+                            {client.companyName}
+                          </p>
+                          <p className="text-xs text-slate-500">{client.companyDomain}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="text-slate-200">{client.primaryContactName}</p>
+                      <p className="text-xs text-slate-500">
+                        {client.primaryContactEmail}
+                      </p>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="rounded-md bg-slate-800 px-2 py-1 text-xs font-medium uppercase tracking-wide text-slate-300">
+                        {client.industry}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-100">
+                          {String(client.activeProjects ?? 0).padStart(2, "0")}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+                          STATUS_STYLES[client.clientStatus] || STATUS_STYLES["Active"]
+                        }`}
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                        {client.clientStatus}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-3 text-slate-400">
+                        <button
+                          onClick={() => openEditModal(client)}
+                          className="hover:text-cyan-400"
+                          aria-label="Edit"
+                        >
+                          <Pencil size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(client.clientID)}
+                          className="hover:text-rose-400"
+                          aria-label="Delete"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
 
-        {/* Pagination */}
+        {/* Footer */}
         <div className="flex items-center justify-between border-t border-slate-800 px-6 py-3.5">
           <p className="text-xs text-slate-500">
             Showing{" "}
             <span className="font-medium text-slate-300">
               1 to {filteredClients.length}
             </span>{" "}
-            of <span className="font-medium text-slate-300">124</span> clients
+            of <span className="font-medium text-slate-300">{clients.length}</span> clients
           </p>
-          <div className="flex items-center gap-1">
-            <button className="rounded-md p-1.5 text-slate-500 hover:bg-slate-800">
-              <ChevronLeft size={16} />
-            </button>
-            {[1, 2, 3].map((p) => (
-              <button
-                key={p}
-                className={[
-                  "h-7 w-7 rounded-md text-xs font-medium",
-                  p === 1
-                    ? "bg-cyan-500 text-slate-950"
-                    : "text-slate-400 hover:bg-slate-800",
-                ].join(" ")}
-              >
-                {p}
-              </button>
-            ))}
-            <span className="px-1 text-slate-600">…</span>
-            <button className="h-7 w-7 rounded-md text-xs font-medium text-slate-400 hover:bg-slate-800">
-              31
-            </button>
-            <button className="rounded-md p-1.5 text-slate-500 hover:bg-slate-800">
-              <ChevronRight size={16} />
-            </button>
-          </div>
         </div>
       </div>
 
@@ -531,8 +461,8 @@ export default function ClientsPage({ isDarkMode = true }) {
       <Modal
         open={modalOpen}
         onClose={closeModal}
-        title={editingId !== null ? "Edit Client" : "Add Client"}
-        subtitle={editingId !== null ? form.company : "Enter client details below"}
+        title={editingClientID !== null ? "Edit Client" : "Add Client"}
+        subtitle={editingClientID !== null ? form.companyName : "Enter client details below"}
         footer={
           <>
             <button
@@ -543,9 +473,10 @@ export default function ClientsPage({ isDarkMode = true }) {
             </button>
             <button
               onClick={handleSave}
-              className="rounded-lg bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-400"
+              disabled={saving}
+              className="rounded-lg bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-cyan-400 disabled:opacity-50"
             >
-              {editingId !== null ? "Save Changes" : "Create Client"}
+              {saving ? "Saving..." : editingClientID !== null ? "Save Changes" : "Create Client"}
             </button>
           </>
         }
@@ -554,32 +485,32 @@ export default function ClientsPage({ isDarkMode = true }) {
           <Field label="Company Name">
             <input
               type="text"
-              value={form.company}
-              onChange={handleChange("company")}
+              value={form.companyName}
+              onChange={handleChange("companyName")}
               className={inputClass}
             />
           </Field>
           <Field label="Domain">
             <input
               type="text"
-              value={form.domain}
-              onChange={handleChange("domain")}
+              value={form.companyDomain}
+              onChange={handleChange("companyDomain")}
               className={inputClass}
             />
           </Field>
           <Field label="Primary Contact">
             <input
               type="text"
-              value={form.contact}
-              onChange={handleChange("contact")}
+              value={form.primaryContactName}
+              onChange={handleChange("primaryContactName")}
               className={inputClass}
             />
           </Field>
           <Field label="Contact Email">
             <input
               type="email"
-              value={form.contactEmail}
-              onChange={handleChange("contactEmail")}
+              value={form.primaryContactEmail}
+              onChange={handleChange("primaryContactEmail")}
               className={inputClass}
             />
           </Field>
@@ -608,8 +539,8 @@ export default function ClientsPage({ isDarkMode = true }) {
           <div className="col-span-2">
             <Field label="Status">
               <select
-                value={form.status}
-                onChange={handleChange("status")}
+                value={form.clientStatus}
+                onChange={handleChange("clientStatus")}
                 className={selectClass}
               >
                 {STATUS_OPTIONS.map((opt) => (

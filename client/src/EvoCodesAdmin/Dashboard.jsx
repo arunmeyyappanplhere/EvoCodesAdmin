@@ -21,21 +21,18 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
+import axiosInstance from "./api/axiosInstance";
 
-// -----------------------------------------------------------------------
-// Dashboard
-// Top-level overview pulling counts + recent activity from every entity:
-// employees, clients, services, projects, blogs, testimonials, contact
-// requests. Wire the fetch calls in loadDashboardData() to your real API
-// (e.g. GET /employees, GET /clients, GET /services, ...).
-// -----------------------------------------------------------------------
-
-const STATUS_COLORS = {
-  ACTIVE: "#34D399",
-  "ON LEAVE": "#FBBF24",
-  DISABLED: "var(--accent-rose)",
-  PENDING: "#38BDF8",
-};
+const DEPT_COLORS = [
+  "#38BDF8",
+  "#34D399",
+  "#818CF8",
+  "#FBBF24",
+  "#F472B6",
+  "#FB923C",
+  "#A78BFA",
+  "#F87171",
+];
 
 const StatCard = ({ icon: Icon, label, value, trend, accent }) => (
   <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-5 flex flex-col gap-3">
@@ -93,33 +90,32 @@ export default function Dashboard({ isDarkMode, onNavigate }) {
     try {
       setLoading(true);
 
-      // Replace with real endpoints, e.g.:
-      // const [employeesRes, clientsRes, servicesRes, blogsRes, contactRes] =
-      //   await Promise.all([
-      //     fetch("/employees").then((r) => r.json()),
-      //     fetch("/clients").then((r) => r.json()),
-      //     fetch("/services").then((r) => r.json()),
-      //     fetch("/blogs").then((r) => r.json()),
-      //     fetch("/contactrequests").then((r) => r.json()),
-      //   ]);
+      const [statsRes, deptRes] = await Promise.all([
+        axiosInstance.get("/dashboard/stats"),
+        axiosInstance.get("/dashboard/departments"),
+      ]);
 
-      // Placeholder data matching your existing screens until wired up
+      const statsData = statsRes.data;
+      const deptData = deptRes.data;
+
       setStats({
-        employees: 128,
-        clients: 124,
-        services: 4,
-        projects: 42,
-        blogs: 16,
-        testimonials: 9,
-        contactRequests: 5,
+        employees: statsData.employees ?? 0,
+        clients: statsData.clients ?? 0,
+        services: statsData.services ?? 0,
+        projects: statsData.activeProjects ?? 0,
+        blogs: statsData.blogPosts ?? 0,
+        testimonials: statsData.testimonials ?? 0,
+        contactRequests: statsData.contactRequests ?? 0,
       });
 
-      setDepartmentData([
-        { name: "Engineering", value: 64, color: "#38BDF8" },
-        { name: "Design", value: 18, color: "#34D399" },
-        { name: "Marketing", value: 24, color: "#818CF8" },
-        { name: "Operations", value: 22, color: "#FBBF24" },
-      ]);
+      const deptColors = DEPT_COLORS;
+      setDepartmentData(
+        (deptData ?? []).map((item, index) => ({
+          name: item.department ?? item._id ?? "Unknown",
+          value: item.count ?? 0,
+          color: deptColors[index % deptColors.length],
+        }))
+      );
     } catch (err) {
       console.error("Failed to load dashboard data:", err);
     } finally {

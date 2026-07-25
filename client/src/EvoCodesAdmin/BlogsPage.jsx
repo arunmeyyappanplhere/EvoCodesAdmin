@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   Plus,
   Search,
@@ -11,55 +11,10 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  Upload,
 } from "lucide-react";
+import axiosInstance from "./api/axiosInstance";
 import Modal, { Field, inputClass, selectClass } from "./Modal";
-
-const BLOGS = [
-  {
-    id: 1,
-    title: "Architecting the Future of Cloud-Native Systems",
-    date: "Oct 24, 2023",
-    category: "Engineering",
-    categoryColor: "bg-cyan-500/10 text-cyan-400",
-    author: "Elena Voss",
-    authorInitials: "EV",
-    status: "Published",
-    thumb: "bg-gradient-to-br from-cyan-600 to-slate-800",
-  },
-  {
-    id: 2,
-    title: "10 Performance Bottlenecks in Modern React Apps",
-    date: "Oct 22, 2023",
-    category: "Tutorials",
-    categoryColor: "bg-violet-500/10 text-violet-400",
-    author: "Marcus Chen",
-    authorInitials: "MC",
-    status: "Draft",
-    thumb: "bg-gradient-to-br from-violet-600 to-slate-800",
-  },
-  {
-    id: 3,
-    title: "Evo Codes Q4 Roadmap: Scaling to 200 Clients",
-    date: "Oct 12, 2023",
-    category: "Company News",
-    categoryColor: "bg-amber-500/10 text-amber-400",
-    author: "Alex Carter",
-    authorInitials: "AC",
-    status: "Published",
-    thumb: "bg-gradient-to-br from-amber-600 to-slate-800",
-  },
-  {
-    id: 4,
-    title: "Mastering CSS Container Queries in Production",
-    date: "Oct 05, 2023",
-    category: "Tutorials",
-    categoryColor: "bg-violet-500/10 text-violet-400",
-    author: "Elena Voss",
-    authorInitials: "EV",
-    status: "Published",
-    thumb: "bg-gradient-to-br from-emerald-600 to-slate-800",
-  },
-];
 
 const STATUS_STYLES = {
   Published: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
@@ -74,47 +29,61 @@ const CATEGORY_OPTIONS = {
   "Company News": "bg-amber-500/10 text-amber-400",
 };
 
-const THUMB_GRADIENTS = [
-  "bg-gradient-to-br from-cyan-600 to-slate-800",
-  "bg-gradient-to-br from-violet-600 to-slate-800",
-  "bg-gradient-to-br from-amber-600 to-slate-800",
-  "bg-gradient-to-br from-emerald-600 to-slate-800",
-];
-
 const emptyBlogForm = {
-  title: "",
-  date: "",
-  category: Object.keys(CATEGORY_OPTIONS)[0],
-  author: "",
-  status: STATUS_OPTIONS[0],
+  blogTitle: "",
+  blogDate: "",
+  blogCategory: Object.keys(CATEGORY_OPTIONS)[0],
+  blogAuthor: "",
+  blogDescription: "",
+  blogStatus: STATUS_OPTIONS[0],
 };
 
 export default function BlogsPage({ isDarkMode = true }) {
-  const [blogs, setBlogs] = useState(BLOGS);
+  const [blogs, setBlogs] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState(null);
+  const [editingBlogID, setEditingBlogID] = useState(null);
   const [form, setForm] = useState(emptyBlogForm);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef(null);
 
   // Search and Filtering states
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("All");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState("All");
 
+  useEffect(() => {
+    loadBlogs();
+  }, []);
+
+  const loadBlogs = async () => {
+    try {
+      setLoading(true);
+      const res = await axiosInstance.get("/blogs");
+      setBlogs(res.data ?? []);
+    } catch (err) {
+      console.error("Failed to load blogs:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Filtered Blogs List
   const filteredBlogs = useMemo(() => {
     return blogs.filter((blog) => {
       const query = searchQuery.toLowerCase().trim();
       const matchesSearch =
-        blog.title.toLowerCase().includes(query) ||
-        blog.author.toLowerCase().includes(query) ||
-        blog.category.toLowerCase().includes(query);
+        (blog.blogTitle || "").toLowerCase().includes(query) ||
+        (blog.blogAuthor || "").toLowerCase().includes(query) ||
+        (blog.blogCategory || "").toLowerCase().includes(query);
 
       const matchesCategory =
-        selectedCategoryFilter === "All" || blog.category === selectedCategoryFilter;
+        selectedCategoryFilter === "All" || blog.blogCategory === selectedCategoryFilter;
 
       const matchesStatus =
-        selectedStatusFilter === "All" || blog.status === selectedStatusFilter;
+        selectedStatusFilter === "All" || blog.blogStatus === selectedStatusFilter;
 
       return matchesSearch && matchesCategory && matchesStatus;
     });
@@ -124,114 +93,135 @@ export default function BlogsPage({ isDarkMode = true }) {
     selected.length === filteredBlogs.length && filteredBlogs.length > 0;
 
   const openCreateModal = () => {
-    setEditingId(null);
+    setEditingBlogID(null);
     setForm(emptyBlogForm);
+    setSelectedFile(null);
     setModalOpen(true);
   };
 
   const openEditModal = (blog) => {
-    setEditingId(blog.id);
+    setEditingBlogID(blog.blogID);
     setForm({
-      title: blog.title,
-      date: "", 
-      category: blog.category,
-      author: blog.author,
-      status: blog.status,
+      blogTitle: blog.blogTitle || "",
+      blogDate: blog.blogDate ? blog.blogDate.split("T")[0] : "",
+      blogCategory: blog.blogCategory || Object.keys(CATEGORY_OPTIONS)[0],
+      blogAuthor: blog.blogAuthor || "",
+      blogDescription: blog.blogDescription || "",
+      blogStatus: blog.blogStatus || STATUS_OPTIONS[0],
     });
+    setSelectedFile(null);
     setModalOpen(true);
   };
 
   const closeModal = () => {
     setModalOpen(false);
-    setEditingId(null);
+    setEditingBlogID(null);
     setForm(emptyBlogForm);
+    setSelectedFile(null);
   };
 
   const handleChange = (key) => (e) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
 
-  const formatDateDisplay = (rawDate) => {
-    if (!rawDate) return "Just now";
-    const d = new Date(rawDate);
-    if (isNaN(d.getTime())) return rawDate;
-    return d.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
+  const handleSave = async () => {
+    if (!form.blogTitle.trim()) return;
 
-  const handleSave = () => {
-    if (!form.title.trim()) return;
-
-    const initials = form.author
-      ? form.author
-          .split(" ")
-          .filter(Boolean)
-          .map((n) => n[0])
-          .join("")
-          .toUpperCase()
-      : "NA";
-
-    const displayDate = formatDateDisplay(form.date);
-
-    if (editingId !== null) {
-      setBlogs((prev) =>
-        prev.map((b) =>
-          b.id === editingId
-            ? {
-                ...b,
-                ...form,
-                date: form.date ? displayDate : b.date,
-                categoryColor:
-                  CATEGORY_OPTIONS[form.category] || b.categoryColor,
-                authorInitials: initials,
-              }
-            : b
-        )
-      );
-    } else {
-      const newBlog = {
-        id: Date.now(),
-        ...form,
-        date: displayDate,
-        categoryColor:
-          CATEGORY_OPTIONS[form.category] || "bg-cyan-500/10 text-cyan-400",
-        authorInitials: initials || "AN",
-        thumb:
-          THUMB_GRADIENTS[Math.floor(Math.random() * THUMB_GRADIENTS.length)],
-      };
-      setBlogs((prev) => [newBlog, ...prev]);
+    // For CREATE, a featured image is required
+    if (!editingBlogID && !selectedFile) {
+      alert("Please select a featured image.");
+      return;
     }
 
-    closeModal();
+    setSaving(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("blogTitle", form.blogTitle.trim());
+      formData.append("blogAuthor", form.blogAuthor.trim());
+      formData.append("blogCategory", form.blogCategory);
+      formData.append("blogDate", form.blogDate || new Date().toISOString().split("T")[0]);
+      formData.append("blogDescription", form.blogDescription.trim());
+      formData.append("blogStatus", form.blogStatus);
+
+      if (selectedFile) {
+        formData.append("blogImage", selectedFile);
+      }
+
+      if (editingBlogID) {
+        await axiosInstance.put(`/blogs/${editingBlogID}`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      } else {
+        await axiosInstance.post("/blogs", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      }
+
+      closeModal();
+      loadBlogs();
+    } catch (err) {
+      console.error("Failed to save blog:", err);
+      const message =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        "Failed to save blog. Please try again.";
+      alert(message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const toggleAll = () => {
-    setSelected(allSelected ? [] : filteredBlogs.map((b) => b.id));
+    setSelected(allSelected ? [] : filteredBlogs.map((b) => b.blogID));
   };
 
-  const toggleOne = (id) => {
+  const toggleOne = (blogID) => {
     setSelected((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+      prev.includes(blogID) ? prev.filter((x) => x !== blogID) : [...prev, blogID]
     );
   };
 
-  const handleDeleteOne = (id) => {
-    setBlogs((prev) => prev.filter((b) => b.id !== id));
-    setSelected((prev) => prev.filter((x) => x !== id));
+  const handleDeleteOne = async (blogID) => {
+    if (!window.confirm("Are you sure you want to delete this blog?")) return;
+    try {
+      await axiosInstance.delete(`/blogs/${blogID}`);
+      setSelected((prev) => prev.filter((x) => x !== blogID));
+      loadBlogs();
+    } catch (err) {
+      console.error("Failed to delete blog:", err);
+      const message =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        "Failed to delete blog. Please try again.";
+      alert(message);
+    }
   };
 
-  const handleBulkDelete = () => {
-    setBlogs((prev) => prev.filter((b) => !selected.includes(b.id)));
-    setSelected([]);
+  const handleBulkDelete = async () => {
+    if (!window.confirm(`Delete ${selected.length} selected blog(s)?`)) return;
+    try {
+      await Promise.all(selected.map((id) => axiosInstance.delete(`/blogs/${id}`)));
+      setSelected([]);
+      loadBlogs();
+    } catch (err) {
+      console.error("Bulk delete failed:", err);
+      alert("Some blogs could not be deleted.");
+    }
   };
 
-  const handleBulkDraft = () => {
-    setBlogs((prev) =>
-      prev.map((b) => (selected.includes(b.id) ? { ...b, status: "Draft" } : b))
-    );
-    setSelected([]);
+  const handleBulkDraft = async () => {
+    try {
+      await Promise.all(
+        selected.map((id) =>
+          axiosInstance.put(`/blogs/${id}`, { blogStatus: "Draft" })
+        )
+      );
+      setSelected([]);
+      loadBlogs();
+    } catch (err) {
+      console.error("Bulk draft failed:", err);
+      alert("Some blogs could not be updated.");
+    }
   };
 
   const selectionActive = selected.length > 0;
@@ -377,7 +367,13 @@ export default function BlogsPage({ isDarkMode = true }) {
             </tr>
           </thead>
           <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800/70' : 'divide-gray-100'}`}>
-            {filteredBlogs.length === 0 ? (
+            {loading ? (
+              <tr>
+                <td colSpan="8" className="py-10 text-center text-slate-500 text-sm">
+                  Loading blogs...
+                </td>
+              </tr>
+            ) : filteredBlogs.length === 0 ? (
               <tr>
                 <td colSpan="8" className="py-10 text-center text-slate-500 text-sm">
                   No articles found matching your search.
@@ -385,41 +381,56 @@ export default function BlogsPage({ isDarkMode = true }) {
               </tr>
             ) : (
               filteredBlogs.map((blog) => (
-                <tr key={blog.id} className={isDarkMode ? 'hover:bg-slate-800/30' : 'hover:bg-gray-50'}>
+                <tr key={blog.blogID || blog._id} className={isDarkMode ? 'hover:bg-slate-800/30' : 'hover:bg-gray-50'}>
                   <td className="px-6 py-4">
                     <input
                       type="checkbox"
-                      checked={selected.includes(blog.id)}
-                      onChange={() => toggleOne(blog.id)}
+                      checked={selected.includes(blog.blogID)}
+                      onChange={() => toggleOne(blog.blogID)}
                       className="h-3.5 w-3.5 rounded border-slate-600 bg-slate-800 accent-cyan-500 cursor-pointer"
                     />
                   </td>
                   <td className="px-2 py-4">
-                    <div className={`h-12 w-16 rounded-md ${blog.thumb}`} />
+                    {blog.blogImg ? (
+                      <img
+                        src={blog.blogImg}
+                        alt={blog.blogTitle}
+                        className="h-12 w-16 rounded-md object-cover"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          if (e.target.nextSibling) e.target.nextSibling.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      className={`h-12 w-16 rounded-md bg-gradient-to-br from-cyan-600 to-slate-800 items-center justify-center ${blog.blogImg ? 'hidden' : 'flex'}`}
+                    >
+                      <span className="text-[10px] text-slate-400">No img</span>
+                    </div>
                   </td>
                   <td className="px-6 py-4">
-                    <p className={`font-semibold ${isDarkMode ? 'text-slate-100' : 'text-gray-900'}`}>{blog.title}</p>
+                    <p className={`font-semibold ${isDarkMode ? 'text-slate-100' : 'text-gray-900'}`}>{blog.blogTitle}</p>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-xs text-slate-400">
-                    {blog.date}
+                    {blog.blogDate ? new Date(blog.blogDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`rounded-md px-2 py-1 text-xs font-medium ${blog.categoryColor}`}>
-                      {blog.category}
+                    <span className={`rounded-md px-2 py-1 text-xs font-medium ${CATEGORY_OPTIONS[blog.blogCategory] || "bg-cyan-500/10 text-cyan-400"}`}>
+                      {blog.blogCategory}
                     </span>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-700 text-[10px] font-semibold text-slate-200">
-                        {blog.authorInitials}
+                        {(blog.blogAuthor || "AN").split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase()}
                       </span>
-                      <span className={isDarkMode ? 'text-slate-300' : 'text-gray-700'}>{blog.author}</span>
+                      <span className={isDarkMode ? 'text-slate-300' : 'text-gray-700'}>{blog.blogAuthor}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[blog.status]}`}>
+                    <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[blog.blogStatus] || STATUS_STYLES.Draft}`}>
                       <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                      {blog.status}
+                      {blog.blogStatus}
                     </span>
                   </td>
                   <td className="px-6 py-4">
@@ -432,7 +443,7 @@ export default function BlogsPage({ isDarkMode = true }) {
                         <Pencil size={16} />
                       </button>
                       <button
-                        onClick={() => handleDeleteOne(blog.id)}
+                        onClick={() => handleDeleteOne(blog.blogID)}
                         className="hover:text-rose-400 cursor-pointer transition-colors"
                         aria-label="Delete blog"
                       >
@@ -457,24 +468,15 @@ export default function BlogsPage({ isDarkMode = true }) {
             </span> of{" "}
             <span className={`font-semibold ${isDarkMode ? "text-slate-200" : "text-gray-900"}`}>{blogs.length}</span> articles
           </p>
-          <div className="flex items-center gap-1.5">
-            <button className={`p-1.5 rounded-lg border transition-colors ${isDarkMode ? "border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800" : "border-gray-300 text-gray-600 hover:text-gray-900 hover:bg-gray-100"}`}>
-              <ChevronLeft size={14} />
-            </button>
-            <button className="px-2.5 py-1 rounded-lg font-bold bg-cyan-400 text-[#0b0f17]">1</button>
-            <button className={`p-1.5 rounded-lg border transition-colors ${isDarkMode ? "border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800" : "border-gray-300 text-gray-600 hover:text-gray-900 hover:bg-gray-100"}`}>
-              <ChevronRight size={14} />
-            </button>
-          </div>
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Create / Edit Modal */}
       <Modal
         open={modalOpen}
         onClose={closeModal}
-        title={editingId !== null ? "Edit Blog" : "Create Blog"}
-        subtitle={editingId !== null ? form.title : "Add a new blog post"}
+        title={editingBlogID !== null ? "Edit Blog" : "Create Blog"}
+        subtitle={editingBlogID !== null ? form.blogTitle : "Add a new blog post"}
         footer={
           <>
             <button
@@ -485,9 +487,10 @@ export default function BlogsPage({ isDarkMode = true }) {
             </button>
             <button
               onClick={handleSave}
-              className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400 cursor-pointer"
+              disabled={saving}
+              className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400 cursor-pointer disabled:opacity-50"
             >
-              {editingId !== null ? "Save Changes" : "Create Article"}
+              {saving ? "Saving..." : editingBlogID !== null ? "Save Changes" : "Create Article"}
             </button>
           </>
         }
@@ -497,8 +500,8 @@ export default function BlogsPage({ isDarkMode = true }) {
             <Field label="Blog Title">
               <input
                 type="text"
-                value={form.title}
-                onChange={handleChange("title")}
+                value={form.blogTitle}
+                onChange={handleChange("blogTitle")}
                 placeholder="Enter blog title..."
                 className={inputClass}
               />
@@ -507,8 +510,8 @@ export default function BlogsPage({ isDarkMode = true }) {
           <Field label="Author">
             <input
               type="text"
-              value={form.author}
-              onChange={handleChange("author")}
+              value={form.blogAuthor}
+              onChange={handleChange("blogAuthor")}
               placeholder="e.g. Elena Voss"
               className={inputClass}
             />
@@ -516,15 +519,15 @@ export default function BlogsPage({ isDarkMode = true }) {
           <Field label="Publish Date">
             <input
               type="date"
-              value={form.date}
-              onChange={handleChange("date")}
+              value={form.blogDate}
+              onChange={handleChange("blogDate")}
               className={inputClass}
             />
           </Field>
           <Field label="Category">
             <select
-              value={form.category}
-              onChange={handleChange("category")}
+              value={form.blogCategory}
+              onChange={handleChange("blogCategory")}
               className={selectClass}
             >
               {Object.keys(CATEGORY_OPTIONS).map((opt) => (
@@ -536,8 +539,8 @@ export default function BlogsPage({ isDarkMode = true }) {
           </Field>
           <Field label="Status">
             <select
-              value={form.status}
-              onChange={handleChange("status")}
+              value={form.blogStatus}
+              onChange={handleChange("blogStatus")}
               className={selectClass}
             >
               {STATUS_OPTIONS.map((opt) => (
@@ -547,6 +550,47 @@ export default function BlogsPage({ isDarkMode = true }) {
               ))}
             </select>
           </Field>
+          <div className="col-span-2">
+            <Field label="Description">
+              <textarea
+                value={form.blogDescription}
+                onChange={handleChange("blogDescription")}
+                rows={3}
+                placeholder="Brief description of the blog post..."
+                className={inputClass}
+              />
+            </Field>
+          </div>
+          <div className="col-span-2">
+            <Field label={`Featured Image ${editingBlogID ? "(leave empty to keep current)" : ""}`}>
+              <div className="flex items-center gap-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      setSelectedFile(e.target.files[0]);
+                    }
+                  }}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs transition-colors ${
+                    isDarkMode ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-gray-300 text-gray-700 hover:bg-gray-100'
+                  }`}
+                >
+                  <Upload size={14} />
+                  {selectedFile ? selectedFile.name : "Choose Image"}
+                </button>
+                {selectedFile && (
+                  <span className="text-[10px] text-cyan-400">{(selectedFile.size / 1024).toFixed(1)} KB</span>
+                )}
+              </div>
+            </Field>
+          </div>
         </div>
       </Modal>
     </div>
