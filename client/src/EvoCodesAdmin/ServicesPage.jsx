@@ -10,6 +10,21 @@ import {
   ShieldCheck,
   Cloud,
   Layers,
+  Database,
+  Globe,
+  Lock,
+  Smartphone,
+  Monitor,
+  Cpu,
+  Network,
+  HardDrive,
+  Wifi,
+  Code,
+  GitBranch,
+  Box,
+  Settings,
+  Zap,
+  Terminal,
 } from "lucide-react";
 import axiosInstance from "./api/axiosInstance";
 
@@ -32,7 +47,40 @@ const ICON_MAP = {
   ShieldCheck,
   Cloud,
   Layers,
+  Database,
+  Globe,
+  Lock,
+  Smartphone,
+  Monitor,
+  Cpu,
+  Network,
+  HardDrive,
+  Wifi,
+  Code,
+  GitBranch,
+  Box,
+  Settings,
+  Zap,
+  Terminal,
 };
+
+const ICON_OPTIONS = [
+  Server, BarChart3, ShieldCheck, Cloud, Layers,
+  Database, Globe, Lock, Smartphone, Monitor,
+  Cpu, Network, HardDrive, Wifi, Code,
+  GitBranch, Box, Settings, Zap, Terminal,
+];
+
+const COLOR_OPTIONS = [
+  { value: "bg-cyan-500/15 text-cyan-300", label: "Cyan", color: "bg-cyan-500" },
+  { value: "bg-emerald-500/15 text-emerald-300", label: "Emerald", color: "bg-emerald-500" },
+  { value: "bg-violet-500/15 text-violet-300", label: "Violet", color: "bg-violet-500" },
+  { value: "bg-amber-500/15 text-amber-300", label: "Amber", color: "bg-amber-500" },
+  { value: "bg-rose-500/15 text-rose-300", label: "Rose", color: "bg-rose-500" },
+  { value: "bg-sky-500/15 text-sky-300", label: "Sky", color: "bg-sky-500" },
+  { value: "bg-indigo-500/15 text-indigo-300", label: "Indigo", color: "bg-indigo-500" },
+  { value: "bg-slate-500/15 text-slate-300", label: "Slate", color: "bg-slate-500" },
+];
 
 const resolveIcon = (iconName) => {
   if (!iconName || typeof iconName !== "string") return Server;
@@ -395,23 +443,78 @@ export default function ServicesPage({ isDarkMode = true }) {
               </div>
               <div className="space-y-1">
                 <label className="text-gray-400 font-medium">Icon</label>
-                <input
-                  type="text"
-                  value={form.serviceIcon}
-                  onChange={handleChange("serviceIcon")}
-                  placeholder="Server, Cloud, ShieldCheck..."
-                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${isDarkMode ? "border-[#1e2640] text-white" : "border-gray-300 text-gray-900"}`}
-                />
+                <div className="flex flex-wrap gap-1.5">
+                  {ICON_OPTIONS.map((IconComp, idx) => {
+                    const iconName = Object.keys(ICON_MAP)[idx];
+                    const isSelected = form.serviceIcon === iconName;
+                    return (
+                      <button
+                        key={iconName}
+                        type="button"
+                        onClick={() => setForm((f) => ({ ...f, serviceIcon: iconName }))}
+                        className={`flex items-center justify-center w-9 h-9 rounded-lg border text-xs transition-all ${
+                          isSelected
+                            ? "bg-cyan-500/20 border-cyan-500 text-cyan-300"
+                            : isDarkMode
+                              ? "border-[#1e2640] text-gray-400 hover:border-gray-500"
+                              : "border-gray-300 text-gray-600 hover:border-gray-400"
+                        }`}
+                        title={iconName}
+                      >
+                        <IconComp size={16} />
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               <div className="space-y-1">
-                <label className="text-gray-400 font-medium">Color Class</label>
-                <input
-                  type="text"
-                  value={form.serviceColor}
-                  onChange={handleChange("serviceColor")}
-                  placeholder="bg-cyan-500/15 text-cyan-300"
-                  className={`w-full p-2.5 rounded-lg border bg-transparent focus:ring-0 ${isDarkMode ? "border-[#1e2640] text-white" : "border-gray-300 text-gray-900"}`}
-                />
+                <label className="text-gray-400 font-medium">Color</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {COLOR_OPTIONS.map((opt) => {
+                    const isSelected = form.serviceColor === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setForm((f) => ({ ...f, serviceColor: opt.value }))}
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs transition-all ${
+                          isSelected
+                            ? "border-cyan-500 ring-1 ring-cyan-500"
+                            : isDarkMode
+                              ? "border-[#1e2640] hover:border-gray-500"
+                              : "border-gray-300 hover:border-gray-400"
+                        }`}
+                        title={opt.label}
+                      >
+                        <span className={`w-3.5 h-3.5 rounded-full ${opt.color}`} />
+                        <span className={isDarkMode ? "text-gray-300" : "text-gray-700"}>{opt.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Preview */}
+              <div className="col-span-2">
+                <label className="text-gray-400 font-medium">Preview</label>
+                <div className={`mt-1.5 flex items-center gap-3 rounded-lg border p-3 ${
+                  isDarkMode ? "border-[#1e2640] bg-[#0b0f17]" : "border-gray-200 bg-gray-50"
+                }`}>
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${form.serviceColor}`}>
+                    {(() => {
+                      const IconComp = ICON_MAP[form.serviceIcon];
+                      return IconComp ? <IconComp size={20} /> : null;
+                    })()}
+                  </div>
+                  <div>
+                    <p className={`text-sm font-semibold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
+                      {form.serviceName || "Service Name"}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {form.serviceHead || "Category / Head"}
+                    </p>
+                  </div>
+                </div>
               </div>
               <div className="col-span-2 space-y-1">
                 <label className="text-gray-400 font-medium">Status</label>
