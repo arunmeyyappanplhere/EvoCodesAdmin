@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Plus,
   Search,
@@ -11,6 +11,7 @@ import {
   ThumbsUp,
   Clock,
 } from "lucide-react";
+import axiosInstance from "./api/axiosInstance";
 import Modal, { Field, inputClass, selectClass } from "./Modal";
 
 const STATUS_OPTIONS = ["Published", "Pending Review", "Archived"];
@@ -29,105 +30,14 @@ const COLOR_PALETTES = [
   "bg-rose-500/20 text-rose-300",
 ];
 
-const TESTIMONIALS = [
-  {
-    id: 1,
-    client: "Sarah Jenkins",
-    company: "NexGen Systems",
-    initials: "SJ",
-    color: "bg-cyan-500/20 text-cyan-300",
-    project: "Cloud Migration Platform",
-    rating: 5,
-    review:
-      "Evo Codes rebuilt our infrastructure pipeline from the ground up. Deployment times dropped from hours to minutes, and their team was responsive at every stage.",
-    date: "Jul 02, 2026",
-    status: "Published",
-  },
-  {
-    id: 2,
-    client: "Marcus Zhao",
-    company: "Vertex Finance",
-    initials: "MZ",
-    color: "bg-violet-500/20 text-violet-300",
-    project: "Fraud Detection API",
-    rating: 4,
-    review:
-      "Solid engineering and clear communication throughout. A couple of milestones slipped, but the end result exceeded what we scoped for.",
-    date: "Jun 18, 2026",
-    status: "Published",
-  },
-  {
-    id: 3,
-    client: "Dr. Elena Kostic",
-    company: "VitalStream",
-    initials: "EK",
-    color: "bg-emerald-500/20 text-emerald-300",
-    project: "Patient Data Dashboard",
-    rating: 5,
-    review:
-      "The team understood the compliance requirements immediately and built a dashboard our clinicians actually enjoy using. Excellent handoff docs too.",
-    date: "Jun 05, 2026",
-    status: "Pending Review",
-  },
-  {
-    id: 4,
-    client: "David Miller",
-    company: "Quantum Logistics",
-    initials: "DM",
-    color: "bg-amber-500/20 text-amber-300",
-    project: "Fleet Tracking System",
-    rating: 3,
-    review:
-      "Good technical work overall. Onboarding took longer than expected and we had to chase status updates a few times mid-project.",
-    date: "May 21, 2026",
-    status: "Archived",
-  },
-];
-
-const SUMMARY_CARDS = (testimonials) => {
-  const total = testimonials.length;
-  const avgRating = total
-    ? (testimonials.reduce((sum, t) => sum + t.rating, 0) / total).toFixed(1)
-    : "0.0";
-  const published = testimonials.filter((t) => t.status === "Published").length;
-  const pending = testimonials.filter((t) => t.status === "Pending Review").length;
-
-  return [
-    {
-      label: "Total Testimonials",
-      value: String(total),
-      icon: MessageSquareQuote,
-      tone: "text-cyan-400",
-    },
-    {
-      label: "Average Rating",
-      value: `${avgRating} / 5`,
-      icon: Star,
-      tone: "text-amber-400",
-    },
-    {
-      label: "Published",
-      value: String(published),
-      icon: ThumbsUp,
-      tone: "text-emerald-400",
-    },
-    {
-      label: "Pending Review",
-      value: String(pending),
-      icon: Clock,
-      tone: "text-amber-400",
-    },
-  ];
-};
-
 const emptyForm = {
-  client: "",
-  company: "",
-  project: "",
+  clientName: "",
+  companyName: "",
+  projectName: "",
   rating: 5,
   review: "",
-  date: "",
-  status: STATUS_OPTIONS[0],
+  reviewDate: "",
+  testimonialStatus: STATUS_OPTIONS[0],
 };
 
 function StarRating({ value }) {
@@ -145,54 +55,125 @@ function StarRating({ value }) {
 }
 
 export default function TestimonialsPage({ isDarkMode = true }) {
-  const [testimonials, setTestimonials] = useState(TESTIMONIALS);
+  const [testimonials, setTestimonials] = useState([]);
+  const [statsData, setStatsData] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("All");
   const [query, setQuery] = useState("");
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingId, setEditingId] = useState(null);
+  const [editingTestimonialId, setEditingTestimonialId] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [saving, setSaving] = useState(false);
 
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [testimonialsRes, statsRes] = await Promise.all([
+        axiosInstance.get("/testimonials"),
+        axiosInstance.get("/testimonials/stats"),
+      ]);
+      setTestimonials(testimonialsRes.data ?? []);
+      setStatsData(statsRes.data ?? null);
+    } catch (err) {
+      console.error("Failed to load testimonials:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filtered = useMemo(() => {
     let rows = testimonials;
-    if (filter !== "All") rows = rows.filter((t) => t.status === filter);
+    if (filter !== "All")
+      rows = rows.filter((t) => t.testimonialStatus === filter);
     const q = query.trim().toLowerCase();
     if (q) {
       rows = rows.filter(
         (t) =>
-          t.client.toLowerCase().includes(q) ||
-          t.company.toLowerCase().includes(q) ||
-          t.project.toLowerCase().includes(q)
+          (t.clientName || "").toLowerCase().includes(q) ||
+          (t.companyName || "").toLowerCase().includes(q) ||
+          (t.projectName || "").toLowerCase().includes(q)
       );
     }
     return rows;
   }, [testimonials, filter, query]);
 
+  // Compute summary cards from stats API or fallback to local data
+  const cards = useMemo(() => {
+    if (statsData) {
+      return [
+        {
+          label: "Total Testimonials",
+          value: String(statsData.total ?? testimonials.length),
+          icon: MessageSquareQuote,
+          tone: "text-cyan-400",
+        },
+        {
+          label: "Average Rating",
+          value: `${(statsData.averageRating ?? 0).toFixed(1)} / 5`,
+          icon: Star,
+          tone: "text-amber-400",
+        },
+        {
+          label: "Published",
+          value: String(statsData.published ?? testimonials.filter((t) => t.testimonialStatus === "Published").length),
+          icon: ThumbsUp,
+          tone: "text-emerald-400",
+        },
+        {
+          label: "Pending Review",
+          value: String(statsData.pending ?? testimonials.filter((t) => t.testimonialStatus === "Pending Review").length),
+          icon: Clock,
+          tone: "text-amber-400",
+        },
+      ];
+    }
+
+    const total = testimonials.length;
+    const avgRating = total
+      ? (testimonials.reduce((sum, t) => sum + (t.rating || 0), 0) / total).toFixed(1)
+      : "0.0";
+    const published = testimonials.filter((t) => t.testimonialStatus === "Published").length;
+    const pending = testimonials.filter((t) => t.testimonialStatus === "Pending Review").length;
+
+    return [
+      { label: "Total Testimonials", value: String(total), icon: MessageSquareQuote, tone: "text-cyan-400" },
+      { label: "Average Rating", value: `${avgRating} / 5`, icon: Star, tone: "text-amber-400" },
+      { label: "Published", value: String(published), icon: ThumbsUp, tone: "text-emerald-400" },
+      { label: "Pending Review", value: String(pending), icon: Clock, tone: "text-amber-400" },
+    ];
+  }, [statsData, testimonials]);
+
   const openCreateModal = () => {
-    setEditingId(null);
+    setEditingTestimonialId(null);
     setForm(emptyForm);
     setModalOpen(true);
   };
 
   const openEditModal = (item) => {
-    setEditingId(item.id);
+    setEditingTestimonialId(item.testimonialId);
     setForm({
-      client: item.client,
-      company: item.company,
-      project: item.project,
-      rating: item.rating,
-      review: item.review,
-      date: item.date,
-      status: item.status,
+      clientName: item.clientName || "",
+      companyName: item.companyName || "",
+      projectName: item.projectName || "",
+      rating: item.rating || 5,
+      review: item.review || "",
+      reviewDate: item.reviewDate ? item.reviewDate.split("T")[0] : "",
+      testimonialStatus: item.testimonialStatus || STATUS_OPTIONS[0],
     });
     setModalOpen(true);
   };
 
   const closeModal = () => {
     setModalOpen(false);
-    setEditingId(null);
+    setEditingTestimonialId(null);
     setForm(emptyForm);
   };
 
@@ -201,11 +182,7 @@ export default function TestimonialsPage({ isDarkMode = true }) {
 
   const formatDateDisplay = (rawDate) => {
     if (!rawDate) {
-      return new Date().toLocaleDateString("en-US", {
-        month: "short",
-        day: "2-digit",
-        year: "numeric",
-      });
+      return new Date().toISOString().split("T")[0];
     }
     const parsed = new Date(rawDate);
     if (isNaN(parsed.getTime())) return rawDate;
@@ -216,56 +193,68 @@ export default function TestimonialsPage({ isDarkMode = true }) {
     });
   };
 
-  const handleSave = () => {
-    if (!form.client.trim() || !form.review.trim()) return;
+  const handleSave = async () => {
+    if (!form.clientName.trim() || !form.review.trim()) return;
+    setSaving(true);
 
-    const initials = form.client
+    try {
+      const payload = {
+        clientName: form.clientName.trim(),
+        companyName: form.companyName.trim(),
+        projectName: form.projectName.trim(),
+        rating: Number(form.rating),
+        review: form.review.trim(),
+        reviewDate: form.reviewDate || new Date().toISOString().split("T")[0],
+        testimonialStatus: form.testimonialStatus,
+      };
+
+      if (editingTestimonialId) {
+        await axiosInstance.put(`/testimonials/${editingTestimonialId}`, payload);
+      } else {
+        await axiosInstance.post("/testimonials", payload);
+      }
+
+      closeModal();
+      loadData();
+    } catch (err) {
+      console.error("Failed to save testimonial:", err);
+      const message =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        "Failed to save testimonial. Please try again.";
+      alert(message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await axiosInstance.delete(`/testimonials/${deleteTarget.testimonialId}`);
+      setDeleteTarget(null);
+      loadData();
+    } catch (err) {
+      console.error("Failed to delete testimonial:", err);
+      const message =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        "Failed to delete testimonial.";
+      alert(message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const getInitials = (name) =>
+    (name || "")
       .split(" ")
       .map((n) => n[0])
       .filter(Boolean)
       .slice(0, 2)
       .join("")
       .toUpperCase() || "CL";
-
-    const displayDate = formatDateDisplay(form.date);
-
-    if (editingId !== null) {
-      // Edit Mode
-      setTestimonials((prev) =>
-        prev.map((t) =>
-          t.id === editingId
-            ? {
-                ...t,
-                ...form,
-                date: displayDate,
-                rating: Number(form.rating),
-                initials,
-              }
-            : t
-        )
-      );
-    } else {
-      // Add Mode
-      const newTestimonial = {
-        id: Date.now(),
-        ...form,
-        date: displayDate,
-        rating: Number(form.rating),
-        initials,
-        color: COLOR_PALETTES[Math.floor(Math.random() * COLOR_PALETTES.length)],
-      };
-      setTestimonials((prev) => [newTestimonial, ...prev]);
-    }
-
-    closeModal();
-  };
-
-  const confirmDelete = () => {
-    setTestimonials((prev) => prev.filter((t) => t.id !== deleteTarget.id));
-    setDeleteTarget(null);
-  };
-
-  const cards = SUMMARY_CARDS(testimonials);
 
   return (
     <div className="p-4 md:p-8 max-w-7xl w-full mx-auto space-y-6">
@@ -369,64 +358,82 @@ export default function TestimonialsPage({ isDarkMode = true }) {
             </tr>
           </thead>
           <tbody className={`divide-y ${isDarkMode ? 'divide-slate-800/70' : 'divide-gray-100'}`}>
-            {filtered.map((item) => (
-              <tr key={item.id} className={isDarkMode ? 'hover:bg-slate-800/30' : 'hover:bg-gray-50'}>
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold ${item.color}`}
-                    >
-                      {item.initials}
-                    </div>
-                    <div>
-                      <p className={`font-semibold ${isDarkMode ? 'text-slate-100' : 'text-gray-900'}`}>{item.client}</p>
-                      <p className="text-xs text-slate-500">{item.company}</p>
-                    </div>
-                  </div>
-                </td>
-                <td className={`px-6 py-4 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>{item.project}</td>
-                <td className="px-6 py-4">
-                  <StarRating value={item.rating} />
-                </td>
-                <td className="max-w-xs px-6 py-4">
-                  <p className="line-clamp-2 text-slate-400">{item.review}</p>
-                </td>
-                <td className="px-6 py-4 text-slate-400 whitespace-nowrap">{item.date}</td>
-                <td className="px-6 py-4">
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[item.status]}`}
-                  >
-                    <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                    {item.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center justify-end gap-3 text-slate-400">
-                    <button
-                      onClick={() => openEditModal(item)}
-                      className="hover:text-cyan-400 cursor-pointer transition-colors"
-                      aria-label="Edit testimonial"
-                    >
-                      <Pencil size={16} />
-                    </button>
-                    <button
-                      onClick={() => setDeleteTarget(item)}
-                      className="hover:text-rose-400 cursor-pointer transition-colors"
-                      aria-label="Delete testimonial"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
+            {loading ? (
+              <tr>
+                <td colSpan={7} className="px-6 py-10 text-center text-slate-500">
+                  Loading testimonials...
                 </td>
               </tr>
-            ))}
-
-            {filtered.length === 0 && (
+            ) : filtered.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-6 py-10 text-center text-slate-500">
                   No testimonials match your search or filter.
                 </td>
               </tr>
+            ) : (
+              filtered.map((item) => {
+                const initials = getInitials(item.clientName);
+                const colorIdx = (filtered.indexOf(item) + (item.rating || 0)) % COLOR_PALETTES.length;
+                const color = COLOR_PALETTES[colorIdx] || COLOR_PALETTES[0];
+                const displayDate = item.reviewDate
+                  ? new Date(item.reviewDate).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "2-digit",
+                      year: "numeric",
+                    })
+                  : "—";
+                return (
+                  <tr key={item.testimonialId || item._id} className={isDarkMode ? 'hover:bg-slate-800/30' : 'hover:bg-gray-50'}>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold ${color}`}
+                        >
+                          {initials}
+                        </div>
+                        <div>
+                          <p className={`font-semibold ${isDarkMode ? 'text-slate-100' : 'text-gray-900'}`}>{item.clientName}</p>
+                          <p className="text-xs text-slate-500">{item.companyName}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className={`px-6 py-4 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>{item.projectName}</td>
+                    <td className="px-6 py-4">
+                      <StarRating value={item.rating || 0} />
+                    </td>
+                    <td className="max-w-xs px-6 py-4">
+                      <p className="line-clamp-2 text-slate-400">{item.review}</p>
+                    </td>
+                    <td className="px-6 py-4 text-slate-400 whitespace-nowrap">{displayDate}</td>
+                    <td className="px-6 py-4">
+                      <span
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLES[item.testimonialStatus] || STATUS_STYLES["Pending Review"]}`}
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                        {item.testimonialStatus}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-end gap-3 text-slate-400">
+                        <button
+                          onClick={() => openEditModal(item)}
+                          className="hover:text-cyan-400 cursor-pointer transition-colors"
+                          aria-label="Edit testimonial"
+                        >
+                          <Pencil size={16} />
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(item)}
+                          className="hover:text-rose-400 cursor-pointer transition-colors"
+                          aria-label="Delete testimonial"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -440,17 +447,6 @@ export default function TestimonialsPage({ isDarkMode = true }) {
             <span className={`font-medium ${isDarkMode ? 'text-slate-300' : 'text-gray-900'}`}>{testimonials.length}</span>{" "}
             testimonials
           </p>
-          <div className="flex items-center gap-1">
-            <button className="rounded-md p-1.5 text-slate-500 hover:bg-slate-800 cursor-pointer">
-              <ChevronLeft size={16} />
-            </button>
-            <button className="h-7 w-7 rounded-md bg-cyan-500 text-sm font-medium text-slate-950">
-              1
-            </button>
-            <button className="rounded-md p-1.5 text-slate-500 hover:bg-slate-800 cursor-pointer">
-              <ChevronRight size={16} />
-            </button>
-          </div>
         </div>
       </div>
 
@@ -458,10 +454,10 @@ export default function TestimonialsPage({ isDarkMode = true }) {
       <Modal
         open={modalOpen}
         onClose={closeModal}
-        title={editingId !== null ? "Edit Testimonial" : "Add Testimonial"}
+        title={editingTestimonialId !== null ? "Edit Testimonial" : "Add Testimonial"}
         subtitle={
-          editingId !== null
-            ? `${form.client}${form.company ? " · " + form.company : ""}`
+          editingTestimonialId !== null
+            ? `${form.clientName}${form.companyName ? " · " + form.companyName : ""}`
             : "Create a new client review"
         }
         footer={
@@ -474,9 +470,10 @@ export default function TestimonialsPage({ isDarkMode = true }) {
             </button>
             <button
               onClick={handleSave}
-              className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400 cursor-pointer"
+              disabled={saving}
+              className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400 cursor-pointer disabled:opacity-50"
             >
-              {editingId !== null ? "Save Changes" : "Create Testimonial"}
+              {saving ? "Saving..." : editingTestimonialId !== null ? "Save Changes" : "Create Testimonial"}
             </button>
           </>
         }
@@ -485,8 +482,8 @@ export default function TestimonialsPage({ isDarkMode = true }) {
           <Field label="Client Name">
             <input
               type="text"
-              value={form.client}
-              onChange={handleChange("client")}
+              value={form.clientName}
+              onChange={handleChange("clientName")}
               placeholder="e.g. Sarah Jenkins"
               className={inputClass}
             />
@@ -494,8 +491,8 @@ export default function TestimonialsPage({ isDarkMode = true }) {
           <Field label="Company">
             <input
               type="text"
-              value={form.company}
-              onChange={handleChange("company")}
+              value={form.companyName}
+              onChange={handleChange("companyName")}
               placeholder="e.g. NexGen Systems"
               className={inputClass}
             />
@@ -504,8 +501,8 @@ export default function TestimonialsPage({ isDarkMode = true }) {
             <Field label="Project">
               <input
                 type="text"
-                value={form.project}
-                onChange={handleChange("project")}
+                value={form.projectName}
+                onChange={handleChange("projectName")}
                 placeholder="e.g. Cloud Migration Platform"
                 className={inputClass}
               />
@@ -527,8 +524,8 @@ export default function TestimonialsPage({ isDarkMode = true }) {
           <Field label="Date">
             <input
               type="date"
-              value={form.date}
-              onChange={handleChange("date")}
+              value={form.reviewDate}
+              onChange={handleChange("reviewDate")}
               className={inputClass}
             />
           </Field>
@@ -546,8 +543,8 @@ export default function TestimonialsPage({ isDarkMode = true }) {
           <div className="col-span-2">
             <Field label="Status">
               <select
-                value={form.status}
-                onChange={handleChange("status")}
+                value={form.testimonialStatus}
+                onChange={handleChange("testimonialStatus")}
                 className={selectClass}
               >
                 {STATUS_OPTIONS.map((opt) => (
@@ -577,9 +574,10 @@ export default function TestimonialsPage({ isDarkMode = true }) {
             </button>
             <button
               onClick={confirmDelete}
-              className="rounded-lg bg-rose-500 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-400 cursor-pointer"
+              disabled={deleting}
+              className="rounded-lg bg-rose-500 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-400 cursor-pointer disabled:opacity-50"
             >
-              Delete
+              {deleting ? "Deleting..." : "Delete"}
             </button>
           </>
         }
@@ -587,9 +585,9 @@ export default function TestimonialsPage({ isDarkMode = true }) {
         {deleteTarget && (
           <p className="text-sm text-slate-300">
             Are you sure you want to delete the testimonial from{" "}
-            <span className="font-semibold text-slate-100">{deleteTarget.client}</span>{" "}
-            ({deleteTarget.company}) about{" "}
-            <span className="font-semibold text-slate-100">{deleteTarget.project}</span>?
+            <span className="font-semibold text-slate-100">{deleteTarget.clientName}</span>{" "}
+            ({deleteTarget.companyName}) about{" "}
+            <span className="font-semibold text-slate-100">{deleteTarget.projectName}</span>?
           </p>
         )}
       </Modal>
