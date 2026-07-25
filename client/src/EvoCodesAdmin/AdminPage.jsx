@@ -44,7 +44,7 @@ const AdminPage = () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.get('/admins');
+      const response = await axios.get('/admins');
       const data = Array.isArray(response.data) ? response.data : response.data.admins || [];
       setAdmins(data);
     } catch (err) {
