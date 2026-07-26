@@ -15,23 +15,26 @@ import {
   AlertCircle
 } from 'lucide-react';
 
+// Configure Axios Instance to handle HttpOnly Auth Cookies
 const api = axios.create({
-  baseURL:  'http://localhost:8000', 
-  withCredentials: true, 
+  baseURL: 'http://localhost:8000/api', // Pointed to /api base path
+  withCredentials: true, // Sends HTTP-only auth cookies automatically
 });
 
-const AdminPage = () => {
+const AdminPage = ({ adminsData, onRegisterAdmin }) => {
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
 
+  // Form State
   const [formData, setFormData] = useState({
     username: '',
     email: '',
     phoneNumber: '',
     password: '',
+    reEnterPassword: '',
     dateOfBirth: '',
     role: 'System Admin',
     companyCode: '',
@@ -40,16 +43,44 @@ const AdminPage = () => {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [formError, setFormError] = useState('');
 
+  // Load admins either from parent props or direct API call
   const fetchAdmins = async () => {
+    if (adminsData && adminsData.length > 0) {
+      setAdmins(adminsData);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
+
     try {
-      const response = await axios.get('/admins');
-      const data = Array.isArray(response.data) ? response.data : response.data.admins || [];
-      setAdmins(data);
+      // 1. Fetch full admin list using `api` instance (includes cookies)
+      const res = await api.get('/admins');
+      const fetchedList = Array.isArray(res.data) ? res.data : res.data.admins || [];
+      
+      if (fetchedList.length > 0) {
+        setAdmins(fetchedList);
+      } else {
+        // Fallback: If /admins is empty, load active session user via /me
+        const meRes = await api.get('/me');
+        if (meRes.data?.admin) {
+          setAdmins([meRes.data.admin]);
+        }
+      }
     } catch (err) {
-      console.error('Failed to fetch admins:', err);
-      setError(err.response?.data?.message || 'Failed to load registered admins from server.');
+      // 2. Fallback to /me if /admins fails due to permissions or route issues
+      try {
+        const meRes = await api.get('/me');
+        if (meRes.data?.admin) {
+          setAdmins([meRes.data.admin]);
+        } else {
+          setError(err.response?.data?.message || 'Failed to load registered admins from server.');
+        }
+      } catch (authErr) {
+        console.error('API Fetch Error:', authErr);
+        setError('Authentication required or session expired. Please log in.');
+      }
     } finally {
       setLoading(false);
     }
@@ -57,21 +88,21 @@ const AdminPage = () => {
 
   useEffect(() => {
     fetchAdmins();
-  }, []);
+  }, [adminsData]);
 
+  // Delete Admin
   const handleDeleteAdmin = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this admin user?')) return;
+    if (!window.confirm('Are you sure you want to delete this admin account?')) return;
 
     try {
       await api.delete(`/admins/${id}`);
-      // Optimistically update frontend state
       setAdmins((prev) => prev.filter((admin) => (admin._id || admin.id) !== id));
     } catch (err) {
-      console.error('Delete error:', err);
       alert(err.response?.data?.message || 'Failed to delete admin.');
     }
   };
 
+  // Input Handling
   const handleFormChange = (e) => {
     const { name, value, files } = e.target;
     if (name === 'image') {
@@ -81,45 +112,64 @@ const AdminPage = () => {
     }
   };
 
+  // Register New Admin
   const handleAddAdmin = async (e) => {
     e.preventDefault();
     setSubmitLoading(true);
     setFormError('');
 
+    if (formData.password !== formData.reEnterPassword) {
+      setFormError('Passwords do not match!');
+      setSubmitLoading(false);
+      return;
+    }
+
     try {
       const multipartData = new FormData();
       Object.keys(formData).forEach((key) => {
-        if (formData[key] !== null) {
+        if (key === 'image') {
+          if (formData.image instanceof File) {
+            multipartData.append('image', formData.image);
+          }
+        } else if (formData[key] !== null && formData[key] !== undefined) {
           multipartData.append(key, formData[key]);
         }
       });
 
-      const response = await api.post('/admins', multipartData, {
+      // Posts to register endpoint using `api` instance
+      const response = await api.post('/register', multipartData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      // Append new admin to view and reset form
-      const createdAdmin = response.data.admin || response.data;
-      setAdmins((prev) => [createdAdmin, ...prev]);
+      const newAdmin = response.data.admin;
+
+      // Ensure local state renders the newly registered admin immediately
+      setAdmins((prev) => [newAdmin, ...prev]);
+
+      if (onRegisterAdmin) {
+        onRegisterAdmin(newAdmin);
+      }
+
       setShowModal(false);
       setFormData({
         username: '',
         email: '',
         phoneNumber: '',
         password: '',
+        reEnterPassword: '',
         dateOfBirth: '',
         role: 'System Admin',
         companyCode: '',
         image: null,
       });
     } catch (err) {
-      console.error('Registration error:', err);
-      setFormError(err.response?.data?.message || 'Error registering new admin.');
+      setFormError(err.response?.data?.message || 'Failed to register admin account.');
     } finally {
       setSubmitLoading(false);
     }
   };
 
+  // Filter admins by username, email, userID, or role
   const filteredAdmins = admins.filter(
     (admin) =>
       admin.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -130,6 +180,7 @@ const AdminPage = () => {
 
   return (
     <div className="p-6 md:p-8 bg-[#0B0F17] text-slate-200 min-h-screen font-sans">
+      {/* Page Title */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
@@ -142,6 +193,7 @@ const AdminPage = () => {
        
       </div>
 
+      {/* Metrics Section */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
         <div className="bg-[#121824] border border-slate-800 p-5 rounded-xl flex items-center justify-between">
           <div>
@@ -176,7 +228,8 @@ const AdminPage = () => {
         </div>
       </div>
 
-      <div className="bg-[#121824] border border-slate-800 rounded-xl p-4 mb-6 flex flex-col md:flex-row items-center justify-between gap-4">
+      {/* Search Bar */}
+      <div className="bg-[#121824] border border-slate-800 rounded-xl p-4 mb-6 flex items-center justify-between">
         <div className="relative w-full md:w-96">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input
@@ -189,6 +242,7 @@ const AdminPage = () => {
         </div>
       </div>
 
+      {/* Error Banner */}
       {error && (
         <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center gap-3 text-red-400 text-sm">
           <AlertCircle size={20} />
@@ -196,6 +250,7 @@ const AdminPage = () => {
         </div>
       )}
 
+      {/* Admins Table */}
       <div className="bg-[#121824] border border-slate-800 rounded-xl overflow-hidden shadow-lg">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -206,7 +261,6 @@ const AdminPage = () => {
                 <th className="py-4 px-6">Phone</th>
                 <th className="py-4 px-6">Role</th>
                 <th className="py-4 px-6">Registered On</th>
-                <th className="py-4 px-6 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-sm">
@@ -221,12 +275,10 @@ const AdminPage = () => {
                 </tr>
               ) : filteredAdmins.length > 0 ? (
                 filteredAdmins.map((admin) => (
-                  <tr key={admin._id || admin.userID} className="hover:bg-[#182030]/30 transition-colors">
-                    {/* User ID */}
+                  <tr key={admin._id || admin.userID || admin.email} className="hover:bg-[#182030]/30 transition-colors">
                     <td className="py-4 px-6 font-mono text-xs font-bold text-[#00E5FF]">
                       {admin.userID || 'N/A'}
                     </td>
-
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-3">
                         <img
@@ -238,28 +290,25 @@ const AdminPage = () => {
                           className="w-10 h-10 rounded-full border border-slate-700 object-cover"
                         />
                         <div>
-                          <p className="font-semibold text-white">{admin.username}</p>
+                          <p className="font-semibold text-white">{admin.username || admin.name}</p>
                           <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
                             <Mail size={12} /> {admin.email}
                           </p>
                         </div>
                       </div>
                     </td>
-
                     <td className="py-4 px-6 text-slate-300 text-xs">
                       <div className="flex items-center gap-1.5">
                         <Phone size={13} className="text-slate-500" />
                         {admin.phoneNumber || 'N/A'}
                       </div>
                     </td>
-
                     <td className="py-4 px-6">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-800 text-slate-300 border border-slate-700">
                         <ShieldCheck size={14} className="text-[#00E5FF]" />
-                        {admin.role}
+                        {admin.role || 'System Admin'}
                       </span>
                     </td>
-
                     <td className="py-4 px-6 text-slate-400 text-xs">
                       <div className="flex items-center gap-1.5">
                         <Calendar size={14} />
@@ -268,16 +317,7 @@ const AdminPage = () => {
                           : admin.dateOfBirth || 'Recently'}
                       </div>
                     </td>
-
-                    <td className="py-4 px-6 text-right">
-                      <button
-                        onClick={() => handleDeleteAdmin(admin._id || admin.id)}
-                        className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                        title="Delete Admin Record"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
+                 
                   </tr>
                 ))
               ) : (
@@ -292,8 +332,7 @@ const AdminPage = () => {
         </div>
       </div>
 
-  
-  
+      
     </div>
   );
 };
