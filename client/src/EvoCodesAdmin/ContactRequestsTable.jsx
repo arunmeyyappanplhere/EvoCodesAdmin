@@ -290,8 +290,20 @@ export default function ContactRequestsTable({ isDarkMode }) {
                       <td className={`py-4 px-6 font-medium max-w-[280px] truncate ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                         {req.contactRequestSubject}
                       </td>
-                      <td className="py-4 px-6 text-xs text-gray-400 font-medium">
-                        {formatDate(req.contactRequestDate || req.createdAt)}
+                      <td className="py-4 px-6 text-xs text-gray-400 font-medium whitespace-nowrap">
+                        {new Date(req.contactRequestDate || req.createdAt).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "2-digit",
+                          year: "numeric",
+                        })}
+                        <br />
+                        <span className="text-[10px] text-gray-500">
+                          {new Date(req.contactRequestDate || req.createdAt).toLocaleTimeString("en-US", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            hour12: true,
+                          })}
+                        </span>
                       </td>
                       <td className="py-4 px-6">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-[10px] font-bold ${

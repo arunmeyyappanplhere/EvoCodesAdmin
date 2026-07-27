@@ -37,7 +37,7 @@ export default function EvoCodesAdmin() {
   const [sortOrder, setSortOrder] = useState('Newest');
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [notificationCount, setNotificationCount] = useState(3);
-  const [mailCount, setMailCount] = useState(5);
+  const [mailCount, setMailCount] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 3;
@@ -184,6 +184,25 @@ export default function EvoCodesAdmin() {
       }
     };
     restoreSession();
+  }, []);
+
+  // Fetch contact requests to count NEW status for the mail badge
+  const fetchMailCount = async () => {
+    try {
+      const res = await axiosInstance.get("/contact-requests");
+      const requests = res.data || [];
+      const newCount = requests.filter(r => r.contactRequestStatus === "NEW").length;
+      setMailCount(newCount);
+    } catch (err) {
+      console.error("Failed to fetch mail count:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchMailCount();
+    // Refresh the count every 30 seconds
+    const interval = setInterval(fetchMailCount, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   // --------------------------------------------------------
