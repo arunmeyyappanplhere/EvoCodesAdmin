@@ -97,9 +97,9 @@ export default function TestimonialsPage({ isDarkMode = true }) {
     if (q) {
       rows = rows.filter(
         (t) =>
-          (t.testimonialName || "").toLowerCase().includes(q) ||
-          (t.testimonialCompany || "").toLowerCase().includes(q) ||
-          (t.testimonialProject || "").toLowerCase().includes(q)
+          (t.clientName || "").toLowerCase().includes(q) ||
+          (t.companyName || "").toLowerCase().includes(q) ||
+          (t.projectName || "").toLowerCase().includes(q)
       );
     }
     return rows;
@@ -138,7 +138,7 @@ export default function TestimonialsPage({ isDarkMode = true }) {
 
     const total = testimonials.length;
     const avgRating = total
-      ? (testimonials.reduce((sum, t) => sum + (t.testimonialRating || 0), 0) / total).toFixed(1)
+      ? (testimonials.reduce((sum, t) => sum + (t.rating || 0), 0) / total).toFixed(1)
       : "0.0";
     const published = testimonials.filter((t) => t.testimonialStatus === "Published").length;
     const pending = testimonials.filter((t) => t.testimonialStatus === "Pending Review").length;
@@ -160,11 +160,11 @@ export default function TestimonialsPage({ isDarkMode = true }) {
   const openEditModal = (item) => {
     setEditingTestimonialId(item.testimonialId);
     setForm({
-      clientName: item.testimonialName || "",
-      companyName: item.testimonialCompany || "",
-      projectName: item.testimonialProject || "",
-      rating: item.testimonialRating || 5,
-      review: item.testimonialQuote || "",
+      clientName: item.clientName || "",
+      companyName: item.companyName || "",
+      projectName: item.projectName || "",
+      rating: item.rating || 5,
+      review: item.review || "",
       reviewDate: item.reviewDate ? item.reviewDate.split("T")[0] : "",
       testimonialStatus: item.testimonialStatus || STATUS_OPTIONS[0],
     });
@@ -199,14 +199,13 @@ export default function TestimonialsPage({ isDarkMode = true }) {
 
     try {
       const payload = {
-        testimonialName: form.clientName.trim(),
-        testimonialRole: form.companyName.trim(),
-        testimonialCompany: form.companyName.trim(),
-        testimonialProject: form.projectName.trim(),
-        testimonialQuote: form.review.trim(),
-        testimonialRating: Number(form.rating),
-        testimonialStatus: form.testimonialStatus,
+        clientName: form.clientName.trim(),
+        companyName: form.companyName.trim(),
+        projectName: form.projectName.trim(),
+        rating: Number(form.rating),
+        review: form.review.trim(),
         reviewDate: form.reviewDate || new Date().toISOString().split("T")[0],
+        testimonialStatus: form.testimonialStatus,
       };
 
       if (editingTestimonialId) {
@@ -373,8 +372,8 @@ export default function TestimonialsPage({ isDarkMode = true }) {
               </tr>
             ) : (
               filtered.map((item) => {
-                const initials = getInitials(item.testimonialName);
-                const colorIdx = (filtered.indexOf(item) + (item.testimonialRating || 0)) % COLOR_PALETTES.length;
+                const initials = getInitials(item.clientName);
+                const colorIdx = (filtered.indexOf(item) + (item.rating || 0)) % COLOR_PALETTES.length;
                 const color = COLOR_PALETTES[colorIdx] || COLOR_PALETTES[0];
                 const displayDate = item.reviewDate
                   ? new Date(item.reviewDate).toLocaleDateString("en-US", {
@@ -393,17 +392,17 @@ export default function TestimonialsPage({ isDarkMode = true }) {
                           {initials}
                         </div>
                         <div>
-                          <p className={`font-semibold ${isDarkMode ? 'text-slate-100' : 'text-gray-900'}`}>{item.testimonialName}</p>
-                          <p className="text-xs text-slate-500">{item.testimonialCompany}</p>
+                          <p className={`font-semibold ${isDarkMode ? 'text-slate-100' : 'text-gray-900'}`}>{item.clientName}</p>
+                          <p className="text-xs text-slate-500">{item.companyName}</p>
                         </div>
                       </div>
                     </td>
-                    <td className={`px-6 py-4 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>{item.testimonialProject}</td>
+                    <td className={`px-6 py-4 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>{item.projectName}</td>
                     <td className="px-6 py-4">
-                      <StarRating value={item.testimonialRating || 0} />
+                      <StarRating value={item.rating || 0} />
                     </td>
                     <td className="max-w-xs px-6 py-4">
-                      <p className="line-clamp-2 text-slate-400">{item.testimonialQuote}</p>
+                      <p className="line-clamp-2 text-slate-400">{item.review}</p>
                     </td>
                     <td className="px-6 py-4 text-slate-400 whitespace-nowrap">{displayDate}</td>
                     <td className="px-6 py-4">
@@ -586,9 +585,9 @@ export default function TestimonialsPage({ isDarkMode = true }) {
         {deleteTarget && (
           <p className="text-sm text-slate-300">
             Are you sure you want to delete the testimonial from{" "}
-            <span className="font-semibold text-slate-100">{deleteTarget.testimonialName}</span>{" "}
-            ({deleteTarget.testimonialCompany}) about{" "}
-            <span className="font-semibold text-slate-100">{deleteTarget.testimonialProject}</span>?
+            <span className="font-semibold text-slate-100">{deleteTarget.clientName}</span>{" "}
+            ({deleteTarget.companyName}) about{" "}
+            <span className="font-semibold text-slate-100">{deleteTarget.projectName}</span>?
           </p>
         )}
       </Modal>
