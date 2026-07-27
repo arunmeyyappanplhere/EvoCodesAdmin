@@ -291,7 +291,7 @@ export default function ContactRequestsTable({ isDarkMode }) {
                         {req.contactRequestSubject}
                       </td>
                       <td className="py-4 px-6 text-xs text-gray-400 font-medium">
-                        {new Date(req.contactRequestDate || req.createdAt).toLocaleString()}
+                        {formatDate(req.contactRequestDate)}
                       </td>
                       <td className="py-4 px-6">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-[10px] font-bold ${
