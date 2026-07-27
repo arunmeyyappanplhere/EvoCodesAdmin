@@ -1,12 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { MailOpen, Archive, Trash2, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { MailOpen, Archive, Trash2, ChevronLeft, ChevronRight, Loader2, Eye, X } from 'lucide-react';
 
 export default function ContactRequestsTable({ isDarkMode }) {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState([]);
   const [subFilter, setSubFilter] = useState('All Requests'); // 'All Requests', 'New', 'Replied', 'Archived'
+  
+  // State for viewing/editing full details in a popup modal
+  const [activeModalRequest, setActiveModalRequest] = useState(null);
+
+  // Helper function to safely format dates
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    const date = new Date(dateString);
+    return isNaN(date.getTime()) ? dateString : date.toLocaleString();
+  };
 
   // Fetch data from backend on load using Axios
   useEffect(() => {
@@ -19,7 +29,6 @@ export default function ContactRequestsTable({ isDarkMode }) {
         setRequests(response.data);
       } catch (error) {
         console.error("Failed to fetch contact requests:", error);
-        
       } finally {
         setLoading(false);
       }
@@ -44,14 +53,14 @@ export default function ContactRequestsTable({ isDarkMode }) {
     }
   };
 
-  // Actions using Axios
+  // Batch Status Handler
   const handleBatchStatus = async (status) => {
     if (selectedIds.length === 0) return alert("Select at least one request.");
     
     try {
       await Promise.all(
         selectedIds.map(id =>
-          axios.put(`/api/contact-requests/${id}`, 
+          axios.put(`http://localhost:8000/api/contact-requests/${id}`, 
             { contactRequestStatus: status },
             { withCredentials: true }
           )
@@ -61,7 +70,7 @@ export default function ContactRequestsTable({ isDarkMode }) {
       setRequests(prev => prev.map(r => selectedIds.includes(r.contactRequestId) ? { ...r, contactRequestStatus: status } : r));
       setSelectedIds([]);
     } catch (error) {
-      console.error("Failed to update status:", error);
+      console.error("Failed to update batch status:", error);
       alert("Error updating request status.");
     }
   };
@@ -73,7 +82,7 @@ export default function ContactRequestsTable({ isDarkMode }) {
       try {
         await Promise.all(
           selectedIds.map(id =>
-            axios.delete(`/api/contact-requests/${id}`, {
+            axios.delete(`http://localhost:8000/api/contact-requests/${id}`, {
               withCredentials: true
             })
           )
@@ -85,6 +94,49 @@ export default function ContactRequestsTable({ isDarkMode }) {
         console.error("Failed to delete requests:", error);
         alert("Error deleting requests.");
       }
+    }
+  };
+
+  // Single Delete Handler
+  const handleDeleteSingle = async (id, e) => {
+    if (e) e.stopPropagation();
+    if (confirm("Are you sure you want to delete this contact request?")) {
+      try {
+        await axios.delete(`http://localhost:8000/api/contact-requests/${id}`, {
+          withCredentials: true
+        });
+        setRequests(prev => prev.filter(r => r.contactRequestId !== id));
+        setSelectedIds(prev => prev.filter(rowId => rowId !== id));
+        if (activeModalRequest?.contactRequestId === id) {
+          setActiveModalRequest(null);
+        }
+      } catch (error) {
+        console.error("Failed to delete request:", error);
+        alert("Error deleting request.");
+      }
+    }
+  };
+
+  // Single status update handler from modal or quick-select
+  const handleUpdateStatusSingle = async (id, newStatus) => {
+    try {
+      const response = await axios.put(
+        `http://localhost:8000/api/contact-requests/${id}`, 
+        { contactRequestStatus: newStatus },
+        { withCredentials: true }
+      );
+      
+      const updatedStatus = response.data.contactRequestStatus || newStatus;
+
+      setRequests(prev => prev.map(r => r.contactRequestId === id ? { ...r, contactRequestStatus: updatedStatus } : r));
+      
+      if (activeModalRequest && activeModalRequest.contactRequestId === id) {
+        setActiveModalRequest(prev => ({ ...prev, contactRequestStatus: updatedStatus }));
+      }
+      
+    } catch (error) {
+      console.error("Failed to update status:", error);
+      alert("Error updating request status.");
     }
   };
 
@@ -100,7 +152,7 @@ export default function ContactRequestsTable({ isDarkMode }) {
 
   return (
     <div className="space-y-6">
-      {/* Top Heading Actions Panel from image */}
+      {/* Top Heading Actions Panel */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h3 className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Contact Requests</h3>
@@ -122,7 +174,7 @@ export default function ContactRequestsTable({ isDarkMode }) {
               isDarkMode ? 'bg-[#151c30] border-[#222f54] text-gray-300 hover:bg-[#1d2744]' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
             }`}
           >
-            <MailOpen size={14} /> Mark as Read
+            <MailOpen size={14} /> Mark as Replied
           </button>
           <button 
             onClick={() => handleBatchStatus('ARCHIVED')}
@@ -141,7 +193,7 @@ export default function ContactRequestsTable({ isDarkMode }) {
         </div>
       </div>
 
-      {/* View Sub Filter Pill Bar matching screenshot exactly */}
+      {/* View Sub Filter Pill Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
         <div className="flex flex-wrap gap-2">
           {['All Requests', 'New', 'Replied', 'Archived'].map((tab) => (
@@ -160,7 +212,7 @@ export default function ContactRequestsTable({ isDarkMode }) {
         </div>
         <div className="flex items-center gap-2 font-semibold text-gray-500">
           <span>Show:</span>
-          <select className={`bg-transparent border-none font-bold text-[#4cc9f0] focus:outline-none cursor-pointer`}>
+          <select className="bg-transparent border-none font-bold text-[#4cc9f0] focus:outline-none cursor-pointer">
             <option>25 rows</option>
             <option>50 rows</option>
           </select>
@@ -189,12 +241,13 @@ export default function ContactRequestsTable({ isDarkMode }) {
                 <th className="py-3.5 px-6">Subject</th>
                 <th className="py-3.5 px-6">Date</th>
                 <th className="py-3.5 px-6">Status</th>
+                <th className="py-3.5 px-6 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className={`divide-y text-sm ${isDarkMode ? 'divide-[#1e2640]/50' : 'divide-gray-200'}`}>
               {loading ? (
                 <tr>
-                  <td colSpan="5" className="py-12 text-center text-gray-500 text-xs">
+                  <td colSpan="6" className="py-12 text-center text-gray-500 text-xs">
                     <div className="flex justify-center items-center gap-2">
                       <Loader2 className="animate-spin text-[#4cc9f0]" size={18} />
                       Loading contact requests...
@@ -203,7 +256,7 @@ export default function ContactRequestsTable({ isDarkMode }) {
                 </tr>
               ) : filteredRequests.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="py-12 text-center text-gray-500 text-xs">No contact records found.</td>
+                  <td colSpan="6" className="py-12 text-center text-gray-500 text-xs">No contact records found.</td>
                 </tr>
               ) : (
                 filteredRequests.map((req) => {
@@ -212,8 +265,12 @@ export default function ContactRequestsTable({ isDarkMode }) {
                     : "UN";
 
                   return (
-                    <tr key={req.contactRequestId} className={`transition-colors group ${isDarkMode ? 'hover:bg-[#141b2d]' : 'hover:bg-gray-50'} ${selectedIds.includes(req.contactRequestId) ? (isDarkMode ? 'bg-[#141b2d]' : 'bg-blue-50/50') : ''}`}>
-                      <td className="py-4 px-6">
+                    <tr 
+                      key={req.contactRequestId} 
+                      onClick={() => setActiveModalRequest(req)}
+                      className={`transition-colors group cursor-pointer ${isDarkMode ? 'hover:bg-[#141b2d]' : 'hover:bg-gray-50'} ${selectedIds.includes(req.contactRequestId) ? (isDarkMode ? 'bg-[#141b2d]' : 'bg-blue-50/50') : ''}`}
+                    >
+                      <td className="py-4 px-6" onClick={(e) => e.stopPropagation()}>
                         <input 
                           type="checkbox"
                           checked={selectedIds.includes(req.contactRequestId)}
@@ -244,6 +301,24 @@ export default function ContactRequestsTable({ isDarkMode }) {
                           {req.contactRequestStatus}
                         </span>
                       </td>
+                      <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-2">
+                          <button 
+                            onClick={() => setActiveModalRequest(req)}
+                            title="View Full Details & Edit"
+                            className="p-1.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-[#4cc9f0] hover:bg-cyan-500/20 transition-all cursor-pointer"
+                          >
+                            <Eye size={14} />
+                          </button>
+                          <button 
+                            onClick={(e) => handleDeleteSingle(req.contactRequestId, e)}
+                            title="Delete Request"
+                            className="p-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-all cursor-pointer"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   );
                 })
@@ -252,7 +327,7 @@ export default function ContactRequestsTable({ isDarkMode }) {
           </table>  
         </div>
 
-        {/* Dynamic Pagination matching look from design */}
+        {/* Dynamic Pagination */}
         <div className={`p-4 flex flex-col sm:flex-row gap-4 items-center justify-between text-xs text-gray-500 border-t ${
           isDarkMode ? 'bg-[#131a2e]/60 border-[#1e2640]' : 'bg-gray-50 border-gray-200'
         }`}>
@@ -260,12 +335,96 @@ export default function ContactRequestsTable({ isDarkMode }) {
           <div className="flex gap-1">
             <button className="p-1.5 rounded border border-[#222f54] text-gray-500 hover:text-white cursor-pointer"><ChevronLeft size={14} /></button>
             <button className="px-2.5 py-1 rounded font-bold bg-[#4cc9f0] text-[#0b0f17]">1</button>
-            <button className="p-1.5 rounded font-bold text-gray-400 hover:text-white">2</button>
-            <button className="p-1.5 rounded font-bold text-gray-400 hover:text-white">3</button>
             <button className="p-1.5 rounded border border-[#222f54] text-gray-500 hover:text-white cursor-pointer"><ChevronRight size={14} /></button>
           </div>
         </div>
       </div>
+
+      {/* Modal View */}
+      {activeModalRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className={`w-full max-w-lg rounded-2xl border p-6 shadow-2xl relative ${
+            isDarkMode ? 'bg-[#0f1422] border-[#1e2640] text-white' : 'bg-white border-gray-200 text-gray-900'
+          }`}>
+            <div className="flex items-center justify-between pb-4 border-b border-gray-700/30">
+              <h3 className="text-lg font-bold">Contact Request Details</h3>
+              <button 
+                onClick={() => setActiveModalRequest(null)}
+                className="p-1 rounded-lg text-gray-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4 my-6 text-sm">
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Sender Name</span>
+                <p className="font-semibold text-base mt-0.5">{activeModalRequest.contactRequestSenderName}</p>
+              </div>
+
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Email Address</span>
+                <p className="font-medium text-[#4cc9f0] mt-0.5">{activeModalRequest.contactRequestEmail}</p>
+              </div>
+
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Subject</span>
+                <p className="font-medium mt-0.5">{activeModalRequest.contactRequestSubject}</p>
+              </div>
+
+              <div>
+                <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Message</span>
+                <div className={`mt-1 p-3 rounded-xl border text-sm max-h-40 overflow-y-auto ${
+                  isDarkMode ? 'bg-[#151c30] border-[#222f54] text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-700'
+                }`}>
+                  {activeModalRequest.contactRequestDesc || activeModalRequest.contactRequestMessage || activeModalRequest.message || "No message body provided."}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-2">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500 block mb-1">Date Received</span>
+                  <span className="text-xs text-gray-400 font-medium">
+                    {formatDate(activeModalRequest.contactRequestDate || activeModalRequest.createdAt)}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-gray-500 block mb-1">Status</span>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={activeModalRequest.contactRequestStatus}
+                      onChange={(e) => handleUpdateStatusSingle(activeModalRequest.contactRequestId, e.target.value)}
+                      className={`text-xs font-bold rounded px-2.5 py-1 border focus:outline-none cursor-pointer ${
+                        isDarkMode ? 'bg-[#151c30] border-[#222f54] text-[#4cc9f0]' : 'bg-gray-100 border-gray-300 text-blue-600'
+                      }`}
+                    >
+                      <option value="NEW">NEW</option>
+                      <option value="REPLIED">REPLIED</option>
+                      <option value="ARCHIVED">ARCHIVED</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-700/30">
+              <button
+                onClick={(e) => handleDeleteSingle(activeModalRequest.contactRequestId, e)}
+                className="flex items-center gap-1.5 border border-rose-500/30 bg-rose-500/10 text-rose-400 px-4 py-2 rounded-lg hover:bg-rose-500/20 transition-all text-xs font-semibold cursor-pointer"
+              >
+                <Trash2 size={14} /> Delete Request
+              </button>
+              <button
+                onClick={() => setActiveModalRequest(null)}
+                className="px-4 py-2 rounded-lg bg-[#4cc9f0] text-[#0b0f17] text-xs font-bold hover:opacity-90 transition-all cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
