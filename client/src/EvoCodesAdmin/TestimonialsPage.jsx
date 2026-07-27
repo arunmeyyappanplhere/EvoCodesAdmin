@@ -31,13 +31,14 @@ const COLOR_PALETTES = [
 ];
 
 const emptyForm = {
-  clientName: "",
-  companyName: "",
-  projectName: "",
-  rating: 5,
-  review: "",
+  testimonialName: "",
+  testimonialCompany: "",
+  testimonialProject: "",
+  testimonialRating: 5,
+  testimonialQuote: "",
   reviewDate: "",
   testimonialStatus: STATUS_OPTIONS[0],
+  testimonialRole: "",
 };
 
 function StarRating({ value }) {
@@ -97,9 +98,9 @@ export default function TestimonialsPage({ isDarkMode = true }) {
     if (q) {
       rows = rows.filter(
         (t) =>
-          (t.clientName || "").toLowerCase().includes(q) ||
-          (t.companyName || "").toLowerCase().includes(q) ||
-          (t.projectName || "").toLowerCase().includes(q)
+          (t.testimonialName || "").toLowerCase().includes(q) ||
+          (t.testimonialCompany || "").toLowerCase().includes(q) ||
+          (t.testimonialProject || "").toLowerCase().includes(q)
       );
     }
     return rows;
@@ -138,7 +139,7 @@ export default function TestimonialsPage({ isDarkMode = true }) {
 
     const total = testimonials.length;
     const avgRating = total
-      ? (testimonials.reduce((sum, t) => sum + (t.rating || 0), 0) / total).toFixed(1)
+      ? (testimonials.reduce((sum, t) => sum + Number(t.testimonialRating || 0), 0) / total).toFixed(1)
       : "0.0";
     const published = testimonials.filter((t) => t.testimonialStatus === "Published").length;
     const pending = testimonials.filter((t) => t.testimonialStatus === "Pending Review").length;
@@ -160,13 +161,14 @@ export default function TestimonialsPage({ isDarkMode = true }) {
   const openEditModal = (item) => {
     setEditingTestimonialId(item.testimonialId);
     setForm({
-      clientName: item.clientName || "",
-      companyName: item.companyName || "",
-      projectName: item.projectName || "",
-      rating: item.rating || 5,
-      review: item.review || "",
+      testimonialName: item.testimonialName || "",
+      testimonialCompany: item.testimonialCompany || "",
+      testimonialProject: item.testimonialProject || "",
+      testimonialRating: Number(item.testimonialRating) || 5,
+      testimonialQuote: item.testimonialQuote || "",
       reviewDate: item.reviewDate ? item.reviewDate.split("T")[0] : "",
       testimonialStatus: item.testimonialStatus || STATUS_OPTIONS[0],
+      testimonialRole: item.testimonialRole || "",
     });
     setModalOpen(true);
   };
@@ -180,32 +182,20 @@ export default function TestimonialsPage({ isDarkMode = true }) {
   const handleChange = (key) => (e) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
 
-  const formatDateDisplay = (rawDate) => {
-    if (!rawDate) {
-      return new Date().toISOString().split("T")[0];
-    }
-    const parsed = new Date(rawDate);
-    if (isNaN(parsed.getTime())) return rawDate;
-    return parsed.toLocaleDateString("en-US", {
-      month: "short",
-      day: "2-digit",
-      year: "numeric",
-    });
-  };
-
   const handleSave = async () => {
-    if (!form.clientName.trim() || !form.review.trim()) return;
+    if (!form.testimonialName.trim() || !form.testimonialQuote.trim()) return;
     setSaving(true);
 
     try {
       const payload = {
-        clientName: form.clientName.trim(),
-        companyName: form.companyName.trim(),
-        projectName: form.projectName.trim(),
-        rating: Number(form.rating),
-        review: form.review.trim(),
-        reviewDate: form.reviewDate || new Date().toISOString().split("T")[0],
+        testimonialName: form.testimonialName.trim(),
+        testimonialRole: form.testimonialRole.trim(),
+        testimonialCompany: form.testimonialCompany.trim(),
+        testimonialProject: form.testimonialProject.trim(),
+        testimonialQuote: form.testimonialQuote.trim(),
+        testimonialRating: String(form.testimonialRating),
         testimonialStatus: form.testimonialStatus,
+        reviewDate: form.reviewDate || new Date().toISOString().split("T")[0],
       };
 
       if (editingTestimonialId) {
@@ -372,8 +362,8 @@ export default function TestimonialsPage({ isDarkMode = true }) {
               </tr>
             ) : (
               filtered.map((item) => {
-                const initials = getInitials(item.clientName);
-                const colorIdx = (filtered.indexOf(item) + (item.rating || 0)) % COLOR_PALETTES.length;
+                const initials = getInitials(item.testimonialName);
+                const colorIdx = (filtered.indexOf(item) + Number(item.testimonialRating || 0)) % COLOR_PALETTES.length;
                 const color = COLOR_PALETTES[colorIdx] || COLOR_PALETTES[0];
                 const displayDate = item.reviewDate
                   ? new Date(item.reviewDate).toLocaleDateString("en-US", {
@@ -392,17 +382,17 @@ export default function TestimonialsPage({ isDarkMode = true }) {
                           {initials}
                         </div>
                         <div>
-                          <p className={`font-semibold ${isDarkMode ? 'text-slate-100' : 'text-gray-900'}`}>{item.clientName}</p>
-                          <p className="text-xs text-slate-500">{item.companyName}</p>
+                          <p className={`font-semibold ${isDarkMode ? 'text-slate-100' : 'text-gray-900'}`}>{item.testimonialName}</p>
+                          <p className="text-xs text-slate-500">{item.testimonialRole && `${item.testimonialRole}${item.testimonialCompany ? ' · ' : ''}`}{item.testimonialCompany}</p>
                         </div>
                       </div>
                     </td>
-                    <td className={`px-6 py-4 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>{item.projectName}</td>
+                    <td className={`px-6 py-4 ${isDarkMode ? 'text-slate-300' : 'text-gray-700'}`}>{item.testimonialProject}</td>
                     <td className="px-6 py-4">
-                      <StarRating value={item.rating || 0} />
+                      <StarRating value={Number(item.testimonialRating) || 0} />
                     </td>
                     <td className="max-w-xs px-6 py-4">
-                      <p className="line-clamp-2 text-slate-400">{item.review}</p>
+                      <p className="line-clamp-2 text-slate-400">{item.testimonialQuote}</p>
                     </td>
                     <td className="px-6 py-4 text-slate-400 whitespace-nowrap">{displayDate}</td>
                     <td className="px-6 py-4">
@@ -457,7 +447,7 @@ export default function TestimonialsPage({ isDarkMode = true }) {
         title={editingTestimonialId !== null ? "Edit Testimonial" : "Add Testimonial"}
         subtitle={
           editingTestimonialId !== null
-            ? `${form.clientName}${form.companyName ? " · " + form.companyName : ""}`
+            ? `${form.testimonialName}${form.testimonialRole ? " (" + form.testimonialRole + ")" : ""}`
             : "Create a new client review"
         }
         footer={
@@ -482,27 +472,38 @@ export default function TestimonialsPage({ isDarkMode = true }) {
           <Field label="Client Name">
             <input
               type="text"
-              value={form.clientName}
-              onChange={handleChange("clientName")}
+              value={form.testimonialName}
+              onChange={handleChange("testimonialName")}
               placeholder="e.g. Sarah Jenkins"
               className={inputClass}
             />
           </Field>
-          <Field label="Company">
+          <Field label="Role / Title">
             <input
               type="text"
-              value={form.companyName}
-              onChange={handleChange("companyName")}
-              placeholder="e.g. NexGen Systems"
+              value={form.testimonialRole}
+              onChange={handleChange("testimonialRole")}
+              placeholder="e.g. CEO, Technical Lead"
               className={inputClass}
             />
           </Field>
           <div className="col-span-2">
+            <Field label="Company">
+              <input
+                type="text"
+                value={form.testimonialCompany}
+                onChange={handleChange("testimonialCompany")}
+                placeholder="e.g. NexGen Systems"
+                className={inputClass}
+              />
+            </Field>
+          </div>
+          <div className="col-span-2">
             <Field label="Project">
               <input
                 type="text"
-                value={form.projectName}
-                onChange={handleChange("projectName")}
+                value={form.testimonialProject}
+                onChange={handleChange("testimonialProject")}
                 placeholder="e.g. Cloud Migration Platform"
                 className={inputClass}
               />
@@ -510,8 +511,8 @@ export default function TestimonialsPage({ isDarkMode = true }) {
           </div>
           <Field label="Rating">
             <select
-              value={form.rating}
-              onChange={handleChange("rating")}
+              value={form.testimonialRating}
+              onChange={handleChange("testimonialRating")}
               className={selectClass}
             >
               {[5, 4, 3, 2, 1].map((n) => (
@@ -532,8 +533,8 @@ export default function TestimonialsPage({ isDarkMode = true }) {
           <div className="col-span-2">
             <Field label="Review">
               <textarea
-                value={form.review}
-                onChange={handleChange("review")}
+                value={form.testimonialQuote}
+                onChange={handleChange("testimonialQuote")}
                 placeholder="Write client review..."
                 rows={4}
                 className={inputClass}
@@ -585,9 +586,9 @@ export default function TestimonialsPage({ isDarkMode = true }) {
         {deleteTarget && (
           <p className="text-sm text-slate-300">
             Are you sure you want to delete the testimonial from{" "}
-            <span className="font-semibold text-slate-100">{deleteTarget.clientName}</span>{" "}
-            ({deleteTarget.companyName}) about{" "}
-            <span className="font-semibold text-slate-100">{deleteTarget.projectName}</span>?
+            <span className="font-semibold text-slate-100">{deleteTarget.testimonialName}</span>{" "}
+            ({deleteTarget.testimonialRole}{deleteTarget.testimonialCompany ? " · " + deleteTarget.testimonialCompany : ""}) about{" "}
+            <span className="font-semibold text-slate-100">{deleteTarget.testimonialProject}</span>?
           </p>
         )}
       </Modal>
