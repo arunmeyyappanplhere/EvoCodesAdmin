@@ -17,7 +17,7 @@ import {
 
 // Configure Axios Instance to handle HttpOnly Auth Cookies
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api', // Pointed to /api base path
+  baseURL: import.meta.env.VITE_BACKEND_API, // Pointed to /api base path
   withCredentials: true, // Sends HTTP-only auth cookies automatically
 });
 
