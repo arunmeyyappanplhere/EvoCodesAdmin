@@ -23,7 +23,7 @@ export default function ContactRequestsTable({ isDarkMode }) {
     const fetchContactRequests = async () => {
       try {
         setLoading(true);
-        const response = await axios.get('http://localhost:8000/api/contact-requests', {
+        const response = await axios.get(import.meta.env.VITE_BACKEND_API + '/contact-requests', {
           withCredentials: true
         });
         setRequests(response.data);
@@ -60,7 +60,7 @@ export default function ContactRequestsTable({ isDarkMode }) {
     try {
       await Promise.all(
         selectedIds.map(id =>
-          axios.put(`http://localhost:8000/api/contact-requests/${id}`, 
+          axios.put(import.meta.env.VITE_BACKEND_API + `/contact-requests/${id}`, 
             { contactRequestStatus: status },
             { withCredentials: true }
           )
@@ -82,7 +82,7 @@ export default function ContactRequestsTable({ isDarkMode }) {
       try {
         await Promise.all(
           selectedIds.map(id =>
-            axios.delete(`http://localhost:8000/api/contact-requests/${id}`, {
+            axios.delete(import.meta.env.VITE_BACKEND_API + `/contact-requests/${id}`, {
               withCredentials: true
             })
           )
@@ -102,7 +102,7 @@ export default function ContactRequestsTable({ isDarkMode }) {
     if (e) e.stopPropagation();
     if (confirm("Are you sure you want to delete this contact request?")) {
       try {
-        await axios.delete(`http://localhost:8000/api/contact-requests/${id}`, {
+        await axios.delete(import.meta.env.VITE_BACKEND_API + `/contact-requests/${id}`, {
           withCredentials: true
         });
         setRequests(prev => prev.filter(r => r.contactRequestId !== id));
@@ -121,7 +121,7 @@ export default function ContactRequestsTable({ isDarkMode }) {
   const handleUpdateStatusSingle = async (id, newStatus) => {
     try {
       const response = await axios.put(
-        `http://localhost:8000/api/contact-requests/${id}`, 
+        import.meta.env.VITE_BACKEND_API + `/contact-requests/${id}`, 
         { contactRequestStatus: newStatus },
         { withCredentials: true }
       );
